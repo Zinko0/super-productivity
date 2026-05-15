@@ -497,6 +497,24 @@ export class OperationLogStoreService {
     return stored ? decodeStoredEntry(stored) : undefined;
   }
 
+  async getLastLocalOperation(): Promise<OperationLogEntry | undefined> {
+    await this._ensureInit();
+    let cursor = await this.db
+      .transaction(STORE_NAMES.OPS, 'readonly')
+      .objectStore(STORE_NAMES.OPS)
+      .openCursor(null, 'prev');
+
+    while (cursor) {
+      const entry = decodeStoredEntry(cursor.value);
+      if (entry.source === 'local' && !entry.rejectedAt) {
+        return entry;
+      }
+      cursor = await cursor.continue();
+    }
+
+    return undefined;
+  }
+
   async getOpsAfterSeq(seq: number): Promise<OperationLogEntry[]> {
     await this._ensureInit();
     const storedEntries = await this.db.getAll(
