@@ -42,6 +42,7 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 import { DateService } from '../../../core/date/date.service';
+import { selectIsProcessingUndoRedo } from '../../../root-store/undo-redo/undo-redo.selectors';
 
 @Injectable()
 export class TaskUiEffects {
@@ -116,7 +117,9 @@ export class TaskUiEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.deleteTask),
-        tap(({ task }) => {
+        withLatestFrom(this._store$.select(selectIsProcessingUndoRedo)),
+        filter(([, isProcessingUndoRedo]) => !isProcessingUndoRedo),
+        tap(([{ task }]) => {
           this._snackService.open({
             translateParams: {
               title: truncate(task.title),

@@ -166,6 +166,8 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     collapseSubTasks: null,
     togglePlay: 'Y',
     taskEditTags: 'G',
+    undo: 'Ctrl+Z',
+    redo: 'Ctrl+Shift+Z',
   },
   localBackup: {
     isEnabled: true,

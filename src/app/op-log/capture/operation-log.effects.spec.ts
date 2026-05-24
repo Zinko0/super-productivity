@@ -92,7 +92,7 @@ describe('OperationLogEffects', () => {
     );
     mockCompactionService.compact.and.returnValue(Promise.resolve());
     mockCompactionService.emergencyCompact.and.returnValue(Promise.resolve(true));
-    mockStore.select.and.returnValue(of({})); // Return empty state observable
+    mockStore.select.and.returnValue(of(false));
     mockClientIdService.loadClientId.and.returnValue(Promise.resolve('testClient'));
     mockOperationCaptureService.dequeue.and.returnValue([]);
     mockDateService.todayStr.and.returnValue('2024-06-14');
