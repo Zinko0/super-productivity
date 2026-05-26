@@ -169,11 +169,33 @@ export class CompensatingOperationsRegistry {
   private _compensateTaskDelete(
     op: Operation,
   ): Promise<CompensatingOpBuildResult | UndoRedoError> {
-    return Promise.resolve({
-      code: UndoRedoErrorCode.MissingSnapshot,
-      message:
-        'Undo for delete needs the captured restoreDeletedTask payload stored with the operation.',
-    });
+    const payload = extractActionPayload(op.payload);
+    const task = payload.task as Task | undefined;
+
+    // 1. Validar se o snapshot da tarefa realmente existe no log
+    if (!task || !task.id) {
+      return Promise.resolve({
+        code: UndoRedoErrorCode.MissingSnapshot,
+        message:
+          'Cannot undo task deletion because the task snapshot is missing in the operation log.',
+      });
+    }
+
+    // 2. Como o Undo de um Delete é recriar a tarefa, a ação compensatória é o ADD
+    return Promise.resolve(
+      this._buildResult({
+        op,
+        operationType: UndoRedoOperationType.Delete, // Tipo da operação original
+        label: 'Undo task deletion',
+        action: TaskSharedActions.addTask({
+          task,
+          workContextId: (payload.workContextId as string | undefined) ?? 'TODAY',
+          workContextType: (payload.workContextType as any) ?? undefined,
+          isAddToBacklog: (payload.isAddToBacklog as boolean | undefined) ?? false,
+          isAddToBottom: (payload.isAddToBottom as boolean | undefined) ?? false,
+        }),
+      }),
+    );
   }
 
   private _buildResult({
