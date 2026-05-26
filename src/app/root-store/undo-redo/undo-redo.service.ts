@@ -121,7 +121,7 @@ export class UndoRedoService {
       };
     }
 
-    const redoAction = this._registry.convertOpToAction(lastRedoOp);
+    const redoAction = await this._registry.convertOpToAction(lastRedoOp);
     if ('code' in redoAction) {
       await this.refreshCanUndo();
       this._store.dispatch(UndoRedoActions.undoFailed({ error: redoAction }));

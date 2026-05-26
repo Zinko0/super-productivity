@@ -23,12 +23,20 @@ export class UndoRedoSnackEffects {
             type: 'SUCCESS',
             msg: label,
             isSkipTranslate: true,
-            actionStr: label.includes('Undoing') ? T.G.UNDO : undefined,
-            actionFn: label.includes('Undoing')
+            actionStr: label.startsWith('Undo ')
+              ? T.G.REDO
+              : label.startsWith('Redo ')
+                ? T.G.UNDO
+                : undefined,
+            actionFn: label.startsWith('Undo ')
               ? () => {
                   void this._undoRedoService.redo();
                 }
-              : undefined,
+              : label.startsWith('Redo ')
+                ? () => {
+                    void this._undoRedoService.undo();
+                  }
+                : undefined,
           }),
         ),
       ),

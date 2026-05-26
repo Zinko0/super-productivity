@@ -23,7 +23,6 @@ export class SnackService {
   private _matSnackBar = inject(MatSnackBar);
 
   private _ref?: MatSnackBarRef<SnackCustomComponent | SimpleSnackBar>;
-  private _lastActionFn?: (() => void) | null;
 
   constructor() {
     const _onWorkContextChange$: Observable<unknown> = this._actions$.pipe(
@@ -58,7 +57,6 @@ export class SnackService {
       msg,
       actionStr,
       actionId,
-      actionFn,
       actionPayload,
       config,
       type,
@@ -116,9 +114,6 @@ export class SnackService {
           destroySubs();
         });
     }
-
-    // Keep reference to actionFn for programmatic triggering (e.g. keyboard shortcuts)
-    this._lastActionFn = actionFn ?? null;
   }
 
   /**
@@ -127,27 +122,15 @@ export class SnackService {
    * Returns true if an action was triggered.
    */
   triggerActionIfPresent(): boolean {
-    try {
-      if (!this._ref) return false;
+    if (!this._ref) return false;
 
-      // Prefer calling the stored actionFn if present
-      if (this._lastActionFn) {
-        this._lastActionFn();
-        this._ref.dismissWithAction();
-        return true;
-      }
+    const instance = this._ref.instance as SnackCustomComponent | undefined;
 
-      // Fallback: try invoking component instance's actionClick if available
-      const instance = (this._ref as any).instance as SnackCustomComponent | undefined;
-      if (instance && typeof instance.actionClick === 'function') {
-        instance.actionClick();
-        return true;
-      }
-
-      return false;
-    } finally {
-      // Clear cached fn after attempt to avoid double-invokes
-      this._lastActionFn = null;
+    if (instance && typeof instance.actionClick === 'function') {
+      instance.actionClick();
+      return true;
     }
+
+    return false;
   }
 }

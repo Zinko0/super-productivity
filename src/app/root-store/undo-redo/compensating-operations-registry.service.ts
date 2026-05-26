@@ -15,6 +15,7 @@ import {
 } from './undo-redo.types';
 import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
 import { selectTaskByIdWithSubTaskData } from '../../features/tasks/store/task.selectors';
+import { getLastDeletePayload } from '../meta/undo-task-delete.meta-reducer';
 
 interface CompensatingOpBuildResult {
   operation: UndoRedoOperation;
@@ -58,7 +59,7 @@ export class CompensatingOperationsRegistry {
     }
   }
 
-  convertOpToAction(op: Operation): Action | UndoRedoError {
+  async convertOpToAction(op: Operation): Promise<Action | UndoRedoError> {
     const payload = extractActionPayload(op.payload);
 
     switch (op.actionType) {
@@ -89,7 +90,15 @@ export class CompensatingOperationsRegistry {
           };
         }
 
-        return TaskSharedActions.deleteTask({ task: task as TaskWithSubTasks });
+        const currentTask = await this._getTaskWithSubTasks(task.id);
+        if (!currentTask?.id) {
+          return {
+            code: UndoRedoErrorCode.MissingEntity,
+            message: 'Cannot redo task deletion because the task no longer exists.',
+          };
+        }
+
+        return TaskSharedActions.deleteTask({ task: currentTask });
       }
 
       default:
@@ -169,31 +178,22 @@ export class CompensatingOperationsRegistry {
   private _compensateTaskDelete(
     op: Operation,
   ): Promise<CompensatingOpBuildResult | UndoRedoError> {
-    const payload = extractActionPayload(op.payload);
-    const task = payload.task as Task | undefined;
+    const restorePayload = getLastDeletePayload();
 
-    // 1. Validar se o snapshot da tarefa realmente existe no log
-    if (!task || !task.id) {
+    if (!restorePayload?.task?.id) {
       return Promise.resolve({
         code: UndoRedoErrorCode.MissingSnapshot,
         message:
-          'Cannot undo task deletion because the task snapshot is missing in the operation log.',
+          'Cannot undo task deletion because the full restore snapshot is missing.',
       });
     }
 
-    // 2. Como o Undo de um Delete é recriar a tarefa, a ação compensatória é o ADD
     return Promise.resolve(
       this._buildResult({
         op,
-        operationType: UndoRedoOperationType.Delete, // Tipo da operação original
+        operationType: UndoRedoOperationType.Delete,
         label: 'Undo task deletion',
-        action: TaskSharedActions.addTask({
-          task,
-          workContextId: (payload.workContextId as string | undefined) ?? 'TODAY',
-          workContextType: (payload.workContextType as any) ?? undefined,
-          isAddToBacklog: (payload.isAddToBacklog as boolean | undefined) ?? false,
-          isAddToBottom: (payload.isAddToBottom as boolean | undefined) ?? false,
-        }),
+        action: TaskSharedActions.restoreDeletedTask(restorePayload),
       }),
     );
   }

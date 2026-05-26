@@ -144,7 +144,7 @@ describe('UndoRedoService', () => {
         entityType: 'TASK',
       },
     } as any;
-    mockRegistry.convertOpToAction.and.returnValue(redoAction);
+    mockRegistry.convertOpToAction.and.returnValue(Promise.resolve(redoAction));
 
     const result = await service.redo();
 
