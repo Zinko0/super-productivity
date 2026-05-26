@@ -9,6 +9,7 @@ export interface PersistentActionMeta {
   opType: OpType;
   isRemote?: boolean; // TRUE if from Sync (prevents re-logging)
   isBulk?: boolean; // TRUE for batch operations
+  isCompensating?: boolean; //TRUE if is an Undo/Redo
 }
 
 export interface PersistentAction extends Action {

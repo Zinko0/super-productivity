@@ -208,14 +208,14 @@ export class ShortcutService {
       }
     } else if (checkKeyCombo(ev, keys.undo)) {
       ev.preventDefault();
-      void this._undoRedoService.undo();
+      this._undoRedoService.undo();
       return;
     } else if (checkKeyCombo(ev, keys.redo)) {
       ev.preventDefault();
       console.debug(
         '[ShortcutService] Redo shortcut detected, calling UndoRedoService.redo()',
       );
-      void this._undoRedoService.redo();
+      this._undoRedoService.redo();
       return;
     } else if (
       checkKeyCombo(ev, 'Ctrl+Shift+*') &&

@@ -86,7 +86,13 @@ describe('UndoRedoService', () => {
         compensatingOp: {
           originalOperationId: op.id,
           label: 'Undo add',
-          action: { type: '[Task] Delete' } as any,
+          action: {
+            type: '[Task] Delete',
+            meta: {
+              isPersistent: true,
+              entityType: 'TASK',
+            },
+          } as any,
         },
       }),
     );
@@ -96,11 +102,22 @@ describe('UndoRedoService', () => {
     expect(result.success).toBeTrue();
     expect(result.operation).toBeDefined();
     expect(mockRegistry.getCompensatingOp).toHaveBeenCalledWith(op);
+    expect(mockRegistry.getCompensatingOp).toHaveBeenCalledTimes(1);
     expect(mockStore.dispatch).toHaveBeenCalledWith(
       jasmine.objectContaining({ type: UndoRedoActions.undo.type }),
     );
     expect(mockStore.dispatch).toHaveBeenCalledWith(
       jasmine.objectContaining({ type: UndoRedoActions.undoSuccess.type }),
+    );
+    expect(mockStore.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        type: '[Task] Delete',
+        meta: jasmine.objectContaining({
+          isPersistent: true,
+          entityType: 'TASK',
+          isCompensating: true,
+        }),
+      }),
     );
   });
 
@@ -120,7 +137,13 @@ describe('UndoRedoService', () => {
       return of(undefined);
     });
 
-    const redoAction = { type: '[Task] Add' } as any;
+    const redoAction = {
+      type: '[Task] Add',
+      meta: {
+        isPersistent: true,
+        entityType: 'TASK',
+      },
+    } as any;
     mockRegistry.convertOpToAction.and.returnValue(redoAction);
 
     const result = await service.redo();
@@ -131,8 +154,19 @@ describe('UndoRedoService', () => {
       expect(result.compensatingOp.originalOperationId).toBe(op.id);
     }
     expect(mockRegistry.convertOpToAction).toHaveBeenCalledWith(op);
+    expect(mockRegistry.convertOpToAction).toHaveBeenCalledTimes(1);
     expect(mockStore.dispatch).toHaveBeenCalledWith(
       jasmine.objectContaining({ type: UndoRedoActions.redo.type }),
+    );
+    expect(mockStore.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        type: '[Task] Add',
+        meta: jasmine.objectContaining({
+          isPersistent: true,
+          entityType: 'TASK',
+          isCompensating: true,
+        }),
+      }),
     );
   });
 

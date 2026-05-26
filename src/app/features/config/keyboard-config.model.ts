@@ -50,7 +50,6 @@ export type KeyboardConfig = Readonly<{
   togglePlay?: string | null;
   taskEditTags?: string | null;
 
-  // Undo/Redo
   undo?: string | null;
   redo?: string | null;
 

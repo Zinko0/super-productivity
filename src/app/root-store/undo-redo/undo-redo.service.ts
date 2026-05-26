@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { Store } from '@ngrx/store';
+import { Action, Store } from '@ngrx/store';
 import { BehaviorSubject, firstValueFrom } from 'rxjs';
 import { take } from 'rxjs/operators';
 
@@ -31,6 +31,8 @@ interface UndoCandidate {
   operation: Operation;
   isFromOpLogFallback?: boolean;
 }
+
+type ActionWithMeta = Action & { meta?: object };
 
 @Injectable({
   providedIn: 'root',
@@ -80,19 +82,22 @@ export class UndoRedoService {
       };
     }
 
-    // Validation passed, dispatch undo action
-    this._store.dispatch(UndoRedoActions.undo({ operation: lastOp }));
-    this._store.dispatch(UndoRedoActions.undoSuccess({ label: '✓ Undoing...' }));
-
     const result = await this._registry.getCompensatingOp(lastOp);
     if ('code' in result) {
       await this.refreshCanUndo();
+      this._store.dispatch(UndoRedoActions.undoFailed({ error: result }));
       return {
         success: false,
         error: result,
         operation: lastOp,
       };
     }
+
+    this._store.dispatch(UndoRedoActions.undo({ operation: lastOp }));
+    this._store.dispatch(this._markAsCompensating(result.compensatingOp.action));
+    this._store.dispatch(
+      UndoRedoActions.undoSuccess({ label: result.compensatingOp.label }),
+    );
     await this.refreshCanUndo();
 
     return {
@@ -127,12 +132,12 @@ export class UndoRedoService {
       };
     }
 
-    // Dispatch redo action
-    this._store.dispatch(UndoRedoActions.redo({ operation: lastRedoOp }));
-    this._store.dispatch(UndoRedoActions.undoSuccess({ label: '✓ Redoing...' }));
-    await this.refreshCanUndo();
-
     const undoRedoOperation = this._buildUndoRedoOperation(lastRedoOp);
+
+    this._store.dispatch(UndoRedoActions.redo({ operation: lastRedoOp }));
+    this._store.dispatch(this._markAsCompensating(redoAction));
+    this._store.dispatch(UndoRedoActions.undoSuccess({ label: undoRedoOperation.label }));
+    await this.refreshCanUndo();
 
     return {
       success: true,
@@ -184,5 +189,17 @@ export class UndoRedoService {
     }
 
     return undefined;
+  }
+
+  private _markAsCompensating(action: Action): ActionWithMeta {
+    const actionWithMeta = action as ActionWithMeta;
+
+    return {
+      ...actionWithMeta,
+      meta: {
+        ...actionWithMeta.meta,
+        isCompensating: true,
+      },
+    };
   }
 }

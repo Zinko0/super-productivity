@@ -58,16 +58,4 @@ export const undoRedoReducer = createReducer(
     console.log('[UndoRedoReducer] clearHistory');
     return initialUndoRedoState;
   }),
-
-  // Set flag for processing undo/redo
-  on(
-    UndoRedoActions.setIsProcessingUndoRedo,
-    (state: UndoRedoState, { isProcessing }) => {
-      console.log('[UndoRedoReducer] setIsProcessingUndoRedo:', isProcessing);
-      return {
-        ...state,
-        isProcessingUndoRedo: isProcessing,
-      };
-    },
-  ),
 );

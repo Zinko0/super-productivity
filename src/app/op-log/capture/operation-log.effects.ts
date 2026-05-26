@@ -2,7 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import type { DeferredLocalActionsPort } from '@sp/sync-core';
 import { ALL_ACTIONS } from '../../util/local-actions.token';
-import { concatMap, filter, tap, withLatestFrom } from 'rxjs/operators';
+import { concatMap, filter } from 'rxjs/operators';
 import { LockService } from '../sync/lock.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import {
@@ -33,7 +33,6 @@ import { SuperSyncStatusService } from '../sync/super-sync-status.service';
 import { DateService } from '../../core/date/date.service';
 import { Store } from '@ngrx/store';
 import { UndoRedoActions } from '../../root-store/undo-redo/undo-redo.actions';
-import { selectIsProcessingUndoRedo } from '../../root-store/undo-redo/undo-redo.selectors';
 
 /**
  * NgRx Effects for persisting application state changes as operations to the
@@ -88,49 +87,14 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
   persistOperation$ = createEffect(
     () =>
       this.actions$.pipe(
-        // TEMP LOG: Inspect incoming actions for debugging why some persistent
-        // actions (e.g., TaskSharedActions.addTask) might not be captured.
-        tap((action) => {
-          try {
-            const meta = (action as any)?.meta;
-            // Only log a few keys to avoid huge objects in console
-            console.debug(
-              '[OperationLogEffects] ACTION',
-              action.type,
-              'meta:',
-              meta
-                ? {
-                    isPersistent: meta.isPersistent,
-                    isRemote: meta.isRemote,
-                    entityType: meta?.entityType,
-                    entityId: meta?.entityId,
-                  }
-                : null,
-            );
-          } catch (e) {
-            console.debug(
-              '[OperationLogEffects] ACTION',
-              action.type,
-              'meta: <error reading meta>',
-            );
-          }
-        }),
         filter(
           (action): action is PersistentAction =>
             isPersistentAction(action) &&
             !action.meta.isRemote &&
             !isDeferredAction(action),
         ),
-        withLatestFrom(this.store.select(selectIsProcessingUndoRedo)),
-        filter(([, isProcessingUndoRedo]) => !isProcessingUndoRedo),
-        tap(([action]) => {
-          console.debug(
-            '[OperationLogEffects] Persisting persistent action',
-            action.type,
-          );
-        }),
         // Use concatMap for sequential processing to maintain FIFO queue order
-        concatMap(([action]) => this.writeOperation(action)),
+        concatMap((action) => this.writeOperation(action)),
       ),
     { dispatch: false },
   );
@@ -307,23 +271,26 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         // 1b. Trigger immediate upload to SuperSync (async, non-blocking)
         this.immediateUploadService.trigger();
 
-        // ALSO: Dispatch the persisted Operation into the Undo/Redo history.
+        // ALSO: Dispatch the persisted Operation if it isn't already a compensating Operation
+        // into the Undo/Redo history.
         // Undo/Redo now reads the canonical op-log operation directly and
         // extracts actionPayload when needed.
-        try {
-          this.store.dispatch(UndoRedoActions.addToUndoStack({ operation: op }));
-          OpLog.normal(
-            '[OperationLogEffects] Dispatched persisted operation to UndoRedo stack',
-            {
-              actionType: op.actionType,
-              entityId: op.entityId,
-            },
-          );
-        } catch (e) {
-          OpLog.err(
-            '[OperationLogEffects] Failed to dispatch persisted operation to UndoRedo',
-            e,
-          );
+        if (!action.meta.isCompensating) {
+          try {
+            this.store.dispatch(UndoRedoActions.addToUndoStack({ operation: op }));
+            OpLog.normal(
+              '[OperationLogEffects] Dispatched persisted operation to UndoRedo stack',
+              {
+                actionType: op.actionType,
+                entityId: op.entityId,
+              },
+            );
+          } catch (e) {
+            OpLog.err(
+              '[OperationLogEffects] Failed to dispatch persisted operation to UndoRedo',
+              e,
+            );
+          }
         }
 
         // 2. Check if compaction is needed

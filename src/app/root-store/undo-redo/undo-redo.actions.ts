@@ -37,12 +37,6 @@ export const UndoRedoActions = createActionGroup({
     clearHistory: emptyProps(),
 
     /**
-     * Internal: Mark that we're processing an undo/redo operation.
-     * This prevents the compensating action from being re-captured.
-     */
-    setIsProcessingUndoRedo: props<{ isProcessing: boolean }>(),
-
-    /**
      * Notify that undo succeeded.
      */
     undoSuccess: props<{ label: string }>(),

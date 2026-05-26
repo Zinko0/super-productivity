@@ -26,8 +26,3 @@ export const selectLastUndoOperation = createSelector(selectUndoStack, (stack) =
 export const selectLastRedoOperation = createSelector(selectRedoStack, (stack) =>
   stack.length > 0 ? stack[0] : null,
 );
-
-export const selectIsProcessingUndoRedo = createSelector(
-  selectUndoRedoState,
-  (state) => state.isProcessingUndoRedo,
-);

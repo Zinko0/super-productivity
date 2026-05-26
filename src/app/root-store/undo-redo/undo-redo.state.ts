@@ -27,13 +27,6 @@ export interface UndoRedoState {
   redoStack: Operation[];
 
   /**
-   * Flag: true while processing undo/redo to prevent re-capturing compensating actions
-   * Set to true before dispatching compensating action
-   * Reset to false after action is processed
-   */
-  isProcessingUndoRedo: boolean;
-
-  /**
    * Maximum number of operations to keep in history
    */
   maxHistorySize: number;
@@ -43,5 +36,4 @@ export const initialUndoRedoState: UndoRedoState = {
   undoStack: [],
   redoStack: [],
   maxHistorySize: 50,
-  isProcessingUndoRedo: false,
 };
