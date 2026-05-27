@@ -2,6 +2,7 @@ import { Action, ActionReducer } from '@ngrx/store';
 
 import { RootState } from '../root-state';
 import { taskDeleteUndoPayloadBuilder } from './undo-task-delete.meta-reducer';
+import { taskUpdateUndoPayloadBuilder } from './undo-task-update.meta-reducer';
 
 export const UNDO_OPERATION_PAYLOAD_KEY = 'undoPayload';
 
@@ -12,6 +13,7 @@ export interface UndoPayloadBuilder {
 
 const undoPayloadBuilders: ReadonlyArray<UndoPayloadBuilder> = [
   taskDeleteUndoPayloadBuilder,
+  taskUpdateUndoPayloadBuilder,
 ];
 const undoPayloadByAction = new WeakMap<Action, unknown>();
 

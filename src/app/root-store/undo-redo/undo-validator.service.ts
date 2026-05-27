@@ -6,6 +6,7 @@ const SUPPORTED_UNDO_ACTIONS = new Set<ActionType>([
   ActionType.TASK_SHARED_ADD,
   ActionType.TASK_SHARED_DELETE,
   ActionType.TASK_ADD_SUB,
+  ActionType.TASK_SHARED_UPDATE,
 ]);
 
 @Injectable({

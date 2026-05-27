@@ -1,11 +1,14 @@
 import { Injectable, inject } from '@angular/core';
+import { Update } from '@ngrx/entity';
 import { Action, Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import { take } from 'rxjs/operators';
 
 import { ActionType, Operation } from '../../op-log/core/operation.types';
+import { addSubTask } from '../../features/tasks/store/task.actions';
 import { TaskSharedActions } from '../meta/task-shared.actions';
 import { RootState } from '../root-state';
+import { WorkContextType } from '../../features/work-context/work-context.model';
 import {
   CompensatingOp,
   UndoRedoError,
@@ -22,6 +25,12 @@ interface CompensatingOpBuildResult {
   operation: UndoRedoOperation;
   compensatingOp: CompensatingOp;
 }
+
+type CompensatingHandler = (
+  op: Operation,
+) => Promise<CompensatingOpBuildResult | UndoRedoError>;
+
+type RedoHandler = (op: Operation) => Promise<Action | UndoRedoError>;
 
 const extractActionPayload = (payload: unknown): Record<string, unknown> => {
   if (!payload || typeof payload !== 'object') {
@@ -42,100 +51,58 @@ const extractActionPayload = (payload: unknown): Record<string, unknown> => {
 export class CompensatingOperationsRegistry {
   private readonly _store = inject<Store<RootState>>(Store);
 
+  private readonly _undoHandlers: Partial<Record<ActionType, CompensatingHandler>> = {
+    [ActionType.TASK_SHARED_ADD]: (op) => this._compensateTaskCreate(op),
+    [ActionType.TASK_ADD_SUB]: (op) => this._compensateSubTaskCreate(op),
+    [ActionType.TASK_SHARED_UPDATE]: (op) => this._compensateTaskUpdate(op),
+    [ActionType.TASK_SHARED_DELETE]: (op) => this._compensateTaskDelete(op),
+  };
+
+  private readonly _redoHandlers: Partial<Record<ActionType, RedoHandler>> = {
+    [ActionType.TASK_SHARED_ADD]: (op) => this._redoTaskCreate(op),
+    [ActionType.TASK_ADD_SUB]: (op) => this._redoSubTaskCreate(op),
+    [ActionType.TASK_SHARED_UPDATE]: (op) => this._redoTaskUpdate(op),
+    [ActionType.TASK_SHARED_DELETE]: (op) => this._redoTaskDelete(op),
+  };
+
   async getCompensatingOp(
     op: Operation,
   ): Promise<CompensatingOpBuildResult | UndoRedoError> {
-    switch (op.actionType) {
-      case ActionType.TASK_SHARED_ADD:
-        return this._compensateTaskCreate(op);
-      case ActionType.TASK_ADD_SUB:
-        return this._compensateSubTaskCreate(op);
-      case ActionType.TASK_SHARED_DELETE:
-        return this._compensateTaskDelete(op);
-      default:
-        return {
-          code: UndoRedoErrorCode.UnsupportedOperation,
-          message: `Undo is not supported for ${op.actionType}.`,
-        };
+    const handler = this._undoHandlers[op.actionType];
+    if (!handler) {
+      return {
+        code: UndoRedoErrorCode.UnsupportedOperation,
+        message: `Undo is not supported for ${op.actionType}.`,
+      };
     }
+
+    return handler(op);
   }
 
   async convertOpToAction(op: Operation): Promise<Action | UndoRedoError> {
-    const payload = extractActionPayload(op.payload);
-
-    switch (op.actionType) {
-      case ActionType.TASK_SHARED_ADD: {
-        const task = payload.task as Task | undefined;
-        if (!task) {
-          return {
-            code: UndoRedoErrorCode.MissingPayload,
-            message: 'Cannot redo task creation without task payload.',
-          };
-        }
-
-        return TaskSharedActions.addTask({
-          task,
-          workContextId: (payload.workContextId as string | undefined) ?? 'TODAY',
-          workContextType: (payload.workContextType as any) ?? undefined,
-          isAddToBacklog: (payload.isAddToBacklog as boolean | undefined) ?? false,
-          isAddToBottom: (payload.isAddToBottom as boolean | undefined) ?? false,
-        });
-      }
-
-      case ActionType.TASK_SHARED_DELETE: {
-        const task = payload.task as Task | undefined;
-        if (!task) {
-          return {
-            code: UndoRedoErrorCode.MissingPayload,
-            message: 'Cannot redo task deletion without task payload.',
-          };
-        }
-
-        const currentTask = await this._getTaskWithSubTasks(task.id);
-        if (!currentTask?.id) {
-          return {
-            code: UndoRedoErrorCode.MissingEntity,
-            message: 'Cannot redo task deletion because the task no longer exists.',
-          };
-        }
-
-        return TaskSharedActions.deleteTask({ task: currentTask });
-      }
-
-      default:
-        return {
-          code: UndoRedoErrorCode.UnsupportedOperation,
-          message: `Redo is not supported for ${op.actionType}.`,
-        };
+    const handler = this._redoHandlers[op.actionType];
+    if (!handler) {
+      return {
+        code: UndoRedoErrorCode.UnsupportedOperation,
+        message: `Redo is not supported for ${op.actionType}.`,
+      };
     }
+
+    return handler(op);
   }
 
   private async _compensateTaskCreate(
     op: Operation,
   ): Promise<CompensatingOpBuildResult | UndoRedoError> {
-    const payload = extractActionPayload(op.payload);
-    const task = payload.task as Task | undefined;
-    if (!task?.id) {
+    const task = this._extractTaskFromPayload(op.payload);
+    if (!task) {
       return {
         code: UndoRedoErrorCode.MissingPayload,
         message: 'Cannot undo task creation without task payload.',
       };
     }
 
-    const taskWithSubTasks = await this._getTaskWithSubTasks(task.id);
-    if (!taskWithSubTasks?.id) {
-      return {
-        code: UndoRedoErrorCode.MissingEntity,
-        message: 'Cannot undo task creation because the task no longer exists.',
-      };
-    }
-
-    return this._buildResult({
-      op,
-      operationType: UndoRedoOperationType.Create,
-      label: 'Undo task creation',
-      action: TaskSharedActions.deleteTask({ task: taskWithSubTasks }),
-    });
+    return this._buildDeleteCompensation(op, task.id, 'Undo task creation');
   }
 
   private async _compensateSubTaskCreate(
@@ -160,19 +127,166 @@ export class CompensatingOperationsRegistry {
       };
     }
 
-    const taskWithSubTasks = await this._getTaskWithSubTasks(task.id);
+    return this._buildDeleteCompensation(op, task.id, 'Undo sub task creation');
+  }
+
+  private async _redoTaskCreate(op: Operation): Promise<Action | UndoRedoError> {
+    const payload = extractActionPayload(op.payload);
+    const task = payload.task as Task | undefined;
+    if (!task) {
+      return {
+        code: UndoRedoErrorCode.MissingPayload,
+        message: 'Cannot redo task creation without task payload.',
+      };
+    }
+
+    return TaskSharedActions.addTask({
+      task,
+      workContextId: (payload.workContextId as string | undefined) ?? 'TODAY',
+      workContextType: payload.workContextType as WorkContextType,
+      isAddToBacklog: (payload.isAddToBacklog as boolean | undefined) ?? false,
+      isAddToBottom: (payload.isAddToBottom as boolean | undefined) ?? false,
+    });
+  }
+
+  private async _redoSubTaskCreate(op: Operation): Promise<Action | UndoRedoError> {
+    const payload = extractActionPayload(op.payload);
+    const task = payload.task as Task | undefined;
+    const parentId = payload.parentId as string | undefined;
+    if (!task?.id || !parentId) {
+      return {
+        code: UndoRedoErrorCode.MissingPayload,
+        message: 'Cannot redo sub task creation without task and parent payload.',
+      };
+    }
+
+    return addSubTask({
+      task,
+      parentId,
+    });
+  }
+
+  private async _redoTaskUpdate(op: Operation): Promise<Action | UndoRedoError> {
+    const payload = extractActionPayload(op.payload);
+    const taskUpdate = payload.task as Update<Task> | undefined;
+    if (!taskUpdate?.id) {
+      return {
+        code: UndoRedoErrorCode.MissingPayload,
+        message: 'Cannot redo task update without task payload.',
+      };
+    }
+
+    const taskId = String(taskUpdate.id);
+
+    return TaskSharedActions.updateTask({
+      task: {
+        id: taskId,
+        changes: taskUpdate.changes,
+      } as Update<Task>,
+      isIgnoreShortSyntax: payload.isIgnoreShortSyntax as boolean | undefined,
+    });
+  }
+
+  private async _redoTaskDelete(op: Operation): Promise<Action | UndoRedoError> {
+    const payload = extractActionPayload(op.payload);
+    const task = payload.task as Task | undefined;
+    if (!task?.id) {
+      return {
+        code: UndoRedoErrorCode.MissingPayload,
+        message: 'Cannot redo task deletion without task payload.',
+      };
+    }
+
+    const currentTask = await this._getTaskWithSubTasks(task.id);
+    if (!currentTask?.id) {
+      return {
+        code: UndoRedoErrorCode.MissingEntity,
+        message: 'Cannot redo task deletion because the task no longer exists.',
+      };
+    }
+
+    return TaskSharedActions.deleteTask({ task: currentTask });
+  }
+
+  private async _buildDeleteCompensation(
+    op: Operation,
+    taskId: string,
+    label: string,
+  ): Promise<CompensatingOpBuildResult | UndoRedoError> {
+    const taskWithSubTasks = await this._getTaskWithSubTasks(taskId);
     if (!taskWithSubTasks?.id) {
       return {
         code: UndoRedoErrorCode.MissingEntity,
-        message: 'Cannot undo sub task creation because the task no longer exists.',
+        message: `Cannot undo ${label.toLowerCase()} because the task no longer exists.`,
       };
     }
 
     return this._buildResult({
       op,
       operationType: UndoRedoOperationType.Create,
-      label: 'Undo sub task creation',
+      label,
       action: TaskSharedActions.deleteTask({ task: taskWithSubTasks }),
+    });
+  }
+
+  private _extractTaskFromPayload(payload: unknown): Task | undefined {
+    const actionPayload = extractActionPayload(payload);
+    return actionPayload.task as Task | undefined;
+  }
+
+  private async _compensateTaskUpdate(
+    op: Operation,
+  ): Promise<CompensatingOpBuildResult | UndoRedoError> {
+    const payload = extractActionPayload(op.payload);
+    const taskUpdate = payload.task as Update<Task> | undefined;
+    const undoPayload = payload[UNDO_OPERATION_PAYLOAD_KEY];
+
+    if (!taskUpdate?.id) {
+      return {
+        code: UndoRedoErrorCode.MissingPayload,
+        message: 'Cannot undo task update without task payload.',
+      };
+    }
+
+    if (!undoPayload || typeof undoPayload !== 'object') {
+      return {
+        code: UndoRedoErrorCode.MissingSnapshot,
+        message:
+          'Cannot undo task update because the previous values snapshot is missing.',
+      };
+    }
+
+    const previousValues = (
+      undoPayload as { snapshot?: { previousValues?: Record<string, unknown> } }
+    ).snapshot?.previousValues;
+
+    if (!previousValues || Object.keys(previousValues).length === 0) {
+      return {
+        code: UndoRedoErrorCode.MissingSnapshot,
+        message:
+          'Cannot undo task update because the previous values snapshot is missing.',
+      };
+    }
+
+    const taskId = String(taskUpdate.id);
+    const currentTask = await this._getTaskWithSubTasks(taskId);
+    if (!currentTask?.id) {
+      return {
+        code: UndoRedoErrorCode.MissingEntity,
+        message: 'Cannot undo task update because the task no longer exists.',
+      };
+    }
+
+    return this._buildResult({
+      op,
+      operationType: UndoRedoOperationType.Update,
+      label: 'Undo task update',
+      action: TaskSharedActions.updateTask({
+        task: {
+          id: taskId,
+          changes: previousValues as Update<Task>['changes'],
+        } as Update<Task>,
+      }),
     });
   }
 

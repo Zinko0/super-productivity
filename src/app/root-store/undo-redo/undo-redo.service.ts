@@ -13,7 +13,6 @@ import {
   selectLastUndoOperation,
 } from './undo-redo.selectors';
 import {
-  CompensatingOp,
   UndoRedoErrorCode,
   UndoRedoOperation,
   UndoRedoResult,
@@ -22,17 +21,16 @@ import {
 import { CompensatingOperationsRegistry } from './compensating-operations-registry.service';
 import { UndoValidatorService } from './undo-validator.service';
 
-export interface UndoHistoryEntry {
-  operation: Operation;
-  compensatingOp?: CompensatingOp;
-}
-
 interface UndoCandidate {
   operation: Operation;
-  isFromOpLogFallback?: boolean;
 }
 
-type ActionWithMeta = Action & { meta?: object };
+type ActionWithMeta = Action & {
+  meta?: {
+    isCompensating?: boolean;
+    [key: string]: unknown;
+  };
+};
 
 @Injectable({
   providedIn: 'root',
@@ -53,7 +51,7 @@ export class UndoRedoService {
   }
 
   async undo(): Promise<UndoRedoResult> {
-    const candidate = await this._getLastUndoCandidate();
+    const candidate = await this._getLastStackCandidate(selectLastUndoOperation);
     const lastOp = candidate?.operation;
 
     if (!lastOp) {
@@ -103,7 +101,7 @@ export class UndoRedoService {
   }
 
   async redo(): Promise<UndoRedoResult> {
-    const candidate = await this._getLastRedoCandidate();
+    const candidate = await this._getLastStackCandidate(selectLastRedoOperation);
     const lastRedoOp = candidate?.operation;
 
     if (!lastRedoOp) {
@@ -145,17 +143,6 @@ export class UndoRedoService {
     };
   }
 
-  private async _getLastRedoCandidate(): Promise<UndoCandidate | undefined> {
-    const stackOp = await firstValueFrom(
-      this._store.select(selectLastRedoOperation).pipe(take(1)),
-    );
-    if (stackOp) {
-      return { operation: stackOp };
-    }
-
-    return undefined;
-  }
-
   async refreshCanUndo(): Promise<void> {
     const canUndo = await firstValueFrom(this._store.select(selectCanUndo).pipe(take(1)));
     const canRedo = await firstValueFrom(this._store.select(selectCanRedo).pipe(take(1)));
@@ -169,16 +156,18 @@ export class UndoRedoService {
       operationType:
         operation.actionType === ActionType.TASK_SHARED_DELETE
           ? UndoRedoOperationType.Delete
-          : UndoRedoOperationType.Create,
+          : operation.actionType === ActionType.TASK_SHARED_UPDATE
+            ? UndoRedoOperationType.Update
+            : UndoRedoOperationType.Create,
       actionType: operation.actionType,
       label: `Redo ${operation.actionType}`,
     };
   }
 
-  private async _getLastUndoCandidate(): Promise<UndoCandidate | undefined> {
-    const stackOp = await firstValueFrom(
-      this._store.select(selectLastUndoOperation).pipe(take(1)),
-    );
+  private async _getLastStackCandidate(
+    selector: typeof selectLastUndoOperation | typeof selectLastRedoOperation,
+  ): Promise<UndoCandidate | undefined> {
+    const stackOp = await firstValueFrom(this._store.select(selector).pipe(take(1)));
     if (stackOp) {
       return { operation: stackOp };
     }

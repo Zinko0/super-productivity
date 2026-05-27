@@ -54,7 +54,43 @@ describe('UndoRedoService', () => {
       ],
     });
 
+    mockStore.select.and.callFake((selector: any) => {
+      if (selector === selectCanUndo) {
+        return of(false);
+      }
+      if (selector === selectCanRedo) {
+        return of(false);
+      }
+      return of(undefined);
+    });
+
     service = TestBed.inject(UndoRedoService);
+  });
+
+  it('undo() should fail when there is no operation in undo stack', async () => {
+    mockStore.select.and.callFake((selector: any) => {
+      if (selector === selectLastUndoOperation) {
+        return of(undefined);
+      }
+      if (selector === selectCanUndo) {
+        return of(false);
+      }
+      if (selector === selectCanRedo) {
+        return of(false);
+      }
+      return of(undefined);
+    });
+
+    const result = await service.undo();
+
+    expect(result.success).toBeFalse();
+    if (!result.success) {
+      expect(result.error.code).toBe('NO_OPERATION');
+    }
+    expect(mockRegistry.getCompensatingOp).not.toHaveBeenCalled();
+    expect(mockStore.dispatch).not.toHaveBeenCalledWith(
+      jasmine.objectContaining({ type: UndoRedoActions.undo.type }),
+    );
   });
 
   it('undo() should succeed when there is an undoable operation and registry returns compensating op', async () => {
@@ -167,6 +203,69 @@ describe('UndoRedoService', () => {
           isCompensating: true,
         }),
       }),
+    );
+  });
+
+  it('redo() should fail when there is no operation in redo stack', async () => {
+    mockStore.select.and.callFake((selector: any) => {
+      if (selector === selectLastRedoOperation) {
+        return of(undefined);
+      }
+      if (selector === selectCanUndo) {
+        return of(false);
+      }
+      if (selector === selectCanRedo) {
+        return of(false);
+      }
+      return of(undefined);
+    });
+
+    const result = await service.redo();
+
+    expect(result.success).toBeFalse();
+    if (!result.success) {
+      expect(result.error.code).toBe('NO_OPERATION');
+    }
+    expect(mockRegistry.convertOpToAction).not.toHaveBeenCalled();
+    expect(mockStore.dispatch).not.toHaveBeenCalledWith(
+      jasmine.objectContaining({ type: UndoRedoActions.redo.type }),
+    );
+  });
+
+  it('redo() should fail when registry cannot convert operation to action', async () => {
+    const op = createOp({ id: 'redo-op', actionType: ActionType.TASK_ADD_SUB });
+
+    mockStore.select.and.callFake((selector: any) => {
+      if (selector === selectLastRedoOperation) {
+        return of(op);
+      }
+      if (selector === selectCanUndo) {
+        return of(false);
+      }
+      if (selector === selectCanRedo) {
+        return of(true);
+      }
+      return of(undefined);
+    });
+
+    mockRegistry.convertOpToAction.and.returnValue(
+      Promise.resolve({
+        code: 'MISSING_PAYLOAD',
+        message: 'Cannot redo sub task creation without task and parent payload.',
+      } as any),
+    );
+
+    const result = await service.redo();
+
+    expect(result.success).toBeFalse();
+    if (!result.success) {
+      expect(result.error.code).toBe('MISSING_PAYLOAD');
+    }
+    expect(mockStore.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({ type: UndoRedoActions.undoFailed.type }),
+    );
+    expect(mockStore.dispatch).not.toHaveBeenCalledWith(
+      jasmine.objectContaining({ type: UndoRedoActions.redo.type }),
     );
   });
 

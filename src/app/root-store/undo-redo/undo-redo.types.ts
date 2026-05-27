@@ -18,12 +18,11 @@ export interface UndoRedoError {
 export enum UndoRedoOperationType {
   Create = 'CREATE',
   Delete = 'DELETE',
+  Update = 'UPDATE',
 }
 
 export interface SnapshotPayload {
   previousValues?: Record<string, unknown>;
-  previousTaskIds?: string[];
-  previousBacklogTaskIds?: string[];
 }
 
 export interface UndoRedoOperation {
@@ -31,7 +30,6 @@ export interface UndoRedoOperation {
   operationType: UndoRedoOperationType;
   actionType: ActionType;
   label: string;
-  snapshot?: SnapshotPayload;
 }
 
 export interface CompensatingOp {
