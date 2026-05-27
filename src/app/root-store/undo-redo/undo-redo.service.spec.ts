@@ -143,7 +143,7 @@ describe('UndoRedoService', () => {
       jasmine.objectContaining({ type: UndoRedoActions.undo.type }),
     );
     expect(mockStore.dispatch).toHaveBeenCalledWith(
-      jasmine.objectContaining({ type: UndoRedoActions.undoSuccess.type }),
+      jasmine.objectContaining({ type: UndoRedoActions.undoRedoSuccess.type }),
     );
     expect(mockStore.dispatch).toHaveBeenCalledWith(
       jasmine.objectContaining({
