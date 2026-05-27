@@ -52,11 +52,6 @@ export class UndoRedoService {
     void this.refreshCanUndo();
   }
 
-  recordOperation(operation: Operation, options?: { preserveRedoStack?: boolean }): void {
-    this._store.dispatch(UndoRedoActions.addToUndoStack({ operation }));
-    void this.refreshCanUndo();
-  }
-
   async undo(): Promise<UndoRedoResult> {
     const candidate = await this._getLastUndoCandidate();
     const lastOp = candidate?.operation;
@@ -93,7 +88,7 @@ export class UndoRedoService {
       };
     }
 
-    this._store.dispatch(UndoRedoActions.undo({ operation: lastOp }));
+    this._store.dispatch(UndoRedoActions.undo());
     this._store.dispatch(this._markAsCompensating(result.compensatingOp.action));
     this._store.dispatch(
       UndoRedoActions.undoSuccess({ label: result.compensatingOp.label }),
@@ -134,7 +129,7 @@ export class UndoRedoService {
 
     const undoRedoOperation = this._buildUndoRedoOperation(lastRedoOp);
 
-    this._store.dispatch(UndoRedoActions.redo({ operation: lastRedoOp }));
+    this._store.dispatch(UndoRedoActions.redo());
     this._store.dispatch(this._markAsCompensating(redoAction));
     this._store.dispatch(UndoRedoActions.undoSuccess({ label: undoRedoOperation.label }));
     await this.refreshCanUndo();

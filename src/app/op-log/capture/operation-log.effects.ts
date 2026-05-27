@@ -34,7 +34,8 @@ import { DateService } from '../../core/date/date.service';
 import { Store } from '@ngrx/store';
 import { UndoRedoActions } from '../../root-store/undo-redo/undo-redo.actions';
 import {
-  consumeUndoPayloadForAction,
+  clearUndoPayloadForAction,
+  getUndoPayloadForAction,
   UNDO_OPERATION_PAYLOAD_KEY,
 } from '../../root-store/meta/undo-operation-payload.meta-reducer';
 
@@ -264,6 +265,9 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         // reducing disk I/O by ~50% on mobile devices.
         // The op.vectorClock already contains the incremented clock (from newClock above).
         await this.opLogStore.appendWithVectorClockUpdate(op, 'local');
+        // Keep undo payloads until persistence succeeds, so retry paths can rebuild
+        // the same operation payload after quota/lock/transient write failures.
+        clearUndoPayloadForAction(action);
 
         // Mark that we have pending ops (not yet uploaded) for UI indicator
         this.superSyncStatusService.updatePendingOpsStatus(true);
@@ -337,7 +341,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
     action: PersistentAction,
     rawActionPayload: Record<string, unknown>,
   ): Record<string, unknown> {
-    const undoPayload = consumeUndoPayloadForAction(action);
+    const undoPayload = getUndoPayloadForAction(action);
     if (!undoPayload) {
       return rawActionPayload;
     }

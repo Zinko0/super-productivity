@@ -23,34 +23,23 @@ export const undoRedoReducer = createReducer(
   }),
 
   // Undo: move from undoStack to redoStack
-  on(UndoRedoActions.undo, (state: UndoRedoState, { operation }) => {
-    console.log('[UndoRedoReducer] undo', operation?.id ?? 'no-op');
-    if (!operation) return state;
+  on(UndoRedoActions.undo, (state) => {
+    if (state.undoStack.length === 0) return state;
 
-    const remainingUndo = state.undoStack.filter((op) => op.id !== operation.id);
-    const redoStack = [operation, ...state.redoStack];
-    // limit history
-    if (redoStack.length > state.maxHistorySize) redoStack.pop();
-    return {
-      ...state,
-      undoStack: remainingUndo,
-      redoStack,
-    };
+    const [operation, ...remainingUndo] = state.undoStack;
+    const redoStack = [operation, ...state.redoStack].slice(0, state.maxHistorySize);
+
+    return { ...state, undoStack: remainingUndo, redoStack };
   }),
 
   // Redo: move from redoStack to undoStack
-  on(UndoRedoActions.redo, (state: UndoRedoState, { operation }) => {
-    console.log('[UndoRedoReducer] redo', operation?.id ?? 'no-op');
-    if (!operation) return state;
+  on(UndoRedoActions.redo, (state) => {
+    if (state.redoStack.length === 0) return state;
 
-    const remainingRedo = state.redoStack.filter((op) => op.id !== operation.id);
-    const undoStack = [operation, ...state.undoStack];
-    if (undoStack.length > state.maxHistorySize) undoStack.pop();
-    return {
-      ...state,
-      redoStack: remainingRedo,
-      undoStack,
-    };
+    const [operation, ...remainingRedo] = state.redoStack;
+    const undoStack = [operation, ...state.undoStack].slice(0, state.maxHistorySize);
+
+    return { ...state, redoStack: remainingRedo, undoStack };
   }),
 
   // Clear history

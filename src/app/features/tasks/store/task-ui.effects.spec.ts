@@ -24,6 +24,7 @@ import { DateService } from '../../../core/date/date.service';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { selectUnplannedDeadlineTasksForToday } from './task.selectors';
 import { Banner } from '../../../core/banner/banner.model';
+import { UndoRedoService } from '../../../root-store/undo-redo/undo-redo.service';
 
 describe('TaskUiEffects', () => {
   let effects: TaskUiEffects;
@@ -33,6 +34,7 @@ describe('TaskUiEffects', () => {
   let navigateToTaskServiceMock: jasmine.SpyObj<NavigateToTaskService>;
   let layoutServiceMock: jasmine.SpyObj<LayoutService>;
   let bannerServiceMock: jasmine.SpyObj<BannerService>;
+  let undoRedoServiceMock: jasmine.SpyObj<UndoRedoService>;
 
   const createMockTask = (overrides: Partial<Task> = {}): Task =>
     ({
@@ -82,6 +84,7 @@ describe('TaskUiEffects', () => {
         'navigate',
       ]);
       layoutServiceMock = jasmine.createSpyObj('LayoutService', ['hideAddTaskBar']);
+      undoRedoServiceMock = jasmine.createSpyObj('UndoRedoService', ['undo']);
 
       const workContextServiceMock = {
         mainListTaskIds$: of(['existing-task-1', 'existing-task-2']),
@@ -99,6 +102,7 @@ describe('TaskUiEffects', () => {
           { provide: TaskService, useValue: taskServiceMock },
           { provide: NavigateToTaskService, useValue: navigateToTaskServiceMock },
           { provide: LayoutService, useValue: layoutServiceMock },
+          { provide: UndoRedoService, useValue: undoRedoServiceMock },
           { provide: WorkContextService, useValue: workContextServiceMock },
           {
             provide: NotifyService,
@@ -141,6 +145,7 @@ describe('TaskUiEffects', () => {
         'navigate',
       ]);
       layoutServiceMock = jasmine.createSpyObj('LayoutService', ['hideAddTaskBar']);
+      undoRedoServiceMock = jasmine.createSpyObj('UndoRedoService', ['undo']);
 
       const workContextServiceMock = {
         mainListTaskIds$: of(['existing-task-1', 'existing-task-2']),
@@ -163,6 +168,7 @@ describe('TaskUiEffects', () => {
           { provide: TaskService, useValue: taskServiceMock },
           { provide: NavigateToTaskService, useValue: navigateToTaskServiceMock },
           { provide: LayoutService, useValue: layoutServiceMock },
+          { provide: UndoRedoService, useValue: undoRedoServiceMock },
           { provide: WorkContextService, useValue: workContextServiceMock },
           {
             provide: NotifyService,
@@ -190,7 +196,7 @@ describe('TaskUiEffects', () => {
         expect(snackServiceMock.open).toHaveBeenCalled();
         const snackParams = snackServiceMock.open.calls.mostRecent()
           .args[0] as SnackParams;
-        expect(snackParams.actionStr).toBe(T.F.TASK.S.GO_TO_TASK);
+        expect(snackParams.actionStr).toBe(T.G.UNDO);
         expect(snackParams.actionFn).toBeDefined();
         done();
       });
@@ -198,18 +204,15 @@ describe('TaskUiEffects', () => {
       actions$.next(createAddTaskAction(task));
     });
 
-    it('should call navigateToTaskService.navigate when action clicked for non-visible task', (done) => {
+    it('should call UndoRedoService.undo when action clicked for non-visible task', (done) => {
       const task = createMockTask({ id: 'new-task-456', projectId: 'project-1' });
 
       effects.taskCreatedSnack$.subscribe(() => {
         const snackParams = snackServiceMock.open.calls.mostRecent()
           .args[0] as SnackParams;
         snackParams.actionFn!();
-        expect(navigateToTaskServiceMock.navigate).toHaveBeenCalledWith(
-          'new-task-456',
-          false,
-        );
-        expect(taskServiceMock.setSelectedId).not.toHaveBeenCalled();
+        expect(undoRedoServiceMock.undo).toHaveBeenCalled();
+        expect(navigateToTaskServiceMock.navigate).not.toHaveBeenCalled();
         done();
       });
 
@@ -229,14 +232,14 @@ describe('TaskUiEffects', () => {
       actions$.next(createAddTaskAction(task));
     });
 
-    it('should close add task bar when Go to task action is clicked', (done) => {
+    it('should not close add task bar when Undo action is clicked', (done) => {
       const task = createMockTask({ id: 'new-task-456', projectId: 'project-1' });
 
       effects.taskCreatedSnack$.subscribe(() => {
         const snackParams = snackServiceMock.open.calls.mostRecent()
           .args[0] as SnackParams;
         snackParams.actionFn!();
-        expect(layoutServiceMock.hideAddTaskBar).toHaveBeenCalled();
+        expect(layoutServiceMock.hideAddTaskBar).not.toHaveBeenCalled();
         done();
       });
 
@@ -259,6 +262,7 @@ describe('TaskUiEffects', () => {
         'navigate',
       ]);
       layoutServiceMock = jasmine.createSpyObj('LayoutService', ['hideAddTaskBar']);
+      undoRedoServiceMock = jasmine.createSpyObj('UndoRedoService', ['undo']);
       bannerServiceMock = jasmine.createSpyObj('BannerService', ['open', 'dismiss']);
       const dateServiceMock = jasmine.createSpyObj('DateService', [
         'todayStr',
@@ -284,6 +288,7 @@ describe('TaskUiEffects', () => {
           { provide: TaskService, useValue: taskServiceMock },
           { provide: NavigateToTaskService, useValue: navigateToTaskServiceMock },
           { provide: LayoutService, useValue: layoutServiceMock },
+          { provide: UndoRedoService, useValue: undoRedoServiceMock },
           {
             provide: WorkContextService,
             useValue: { mainListTaskIds$: of([]) },

@@ -115,22 +115,4 @@ export class SnackService {
         });
     }
   }
-
-  /**
-   * If the currently opened snackbar has an action (either `actionFn` or
-   * an action button) trigger it programmatically and dismiss the snackbar.
-   * Returns true if an action was triggered.
-   */
-  triggerActionIfPresent(): boolean {
-    if (!this._ref) return false;
-
-    const instance = this._ref.instance as SnackCustomComponent | undefined;
-
-    if (instance && typeof instance.actionClick === 'function') {
-      instance.actionClick();
-      return true;
-    }
-
-    return false;
-  }
 }

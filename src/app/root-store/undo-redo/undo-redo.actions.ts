@@ -21,14 +21,14 @@ export const UndoRedoActions = createActionGroup({
      * Pops from undo stack and pushes to redo stack.
      * The effect will dispatch the reverse action.
      */
-    undo: props<{ operation: Operation }>(),
+    undo: emptyProps(),
 
     /**
      * Perform a redo operation.
      * Pops from redo stack and pushes to undo stack.
      * The effect will dispatch the original action.
      */
-    redo: props<{ operation: Operation }>(),
+    redo: emptyProps(),
 
     /**
      * Clear all undo/redo history.

@@ -15,10 +15,11 @@ const undoPayloadBuilders: ReadonlyArray<UndoPayloadBuilder> = [
 ];
 const undoPayloadByAction = new WeakMap<Action, unknown>();
 
-export const consumeUndoPayloadForAction = (action: Action): unknown | null => {
-  const payload = undoPayloadByAction.get(action) ?? null;
+export const getUndoPayloadForAction = (action: Action): unknown | null =>
+  undoPayloadByAction.get(action) ?? null;
+
+export const clearUndoPayloadForAction = (action: Action): void => {
   undoPayloadByAction.delete(action);
-  return payload;
 };
 
 /**
@@ -37,7 +38,7 @@ export const undoOperationPayloadMetaReducer = <T, V extends Action = Action>(
 
     if (builder && state) {
       const payload = builder.build(state as unknown as RootState, action);
-      if (payload) {
+      if (payload !== null) {
         undoPayloadByAction.set(action, payload);
       }
     }

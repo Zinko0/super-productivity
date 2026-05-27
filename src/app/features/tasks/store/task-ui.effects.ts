@@ -64,6 +64,7 @@ export class TaskUiEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.addTask),
+        filter(({ meta }) => !(meta as PersistentActionMeta | undefined)?.isCompensating),
         withLatestFrom(this._workContextService.mainListTaskIds$),
         switchMap(([{ task }, activeContextTaskIds]) => {
           if (task.projectId) {
@@ -103,10 +104,9 @@ export class TaskUiEffects {
               ? T.F.TASK.S.CREATED_FOR_PROJECT
               : T.F.TASK.S.TASK_CREATED,
             ico: 'add',
-            actionStr: T.F.TASK.S.GO_TO_TASK,
+            actionStr: T.G.UNDO,
             actionFn: () => {
-              this._layoutService.hideAddTaskBar();
-              this._navigateToTaskService.navigate(task.id, false);
+              void this._undoRedoService.undo();
             },
           });
         }),
@@ -118,7 +118,7 @@ export class TaskUiEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.deleteTask),
-        filter(({ meta }) => !(meta as PersistentActionMeta).isCompensating),
+        filter(({ meta }) => !(meta as PersistentActionMeta | undefined)?.isCompensating),
         tap(({ task }) => {
           this._snackService.open({
             translateParams: {

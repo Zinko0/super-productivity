@@ -1,5 +1,6 @@
 import {
-  consumeUndoPayloadForAction,
+  clearUndoPayloadForAction,
+  getUndoPayloadForAction,
   undoOperationPayloadMetaReducer,
 } from './undo-operation-payload.meta-reducer';
 import {
@@ -109,7 +110,7 @@ describe('undoOperationPayloadMetaReducer task delete payload', () => {
   };
 
   const getTaskDeleteRestorePayload = (action: Action): RestoreDeletedTaskPayload =>
-    expectTaskDeleteRestorePayload(consumeUndoPayloadForAction(action));
+    expectTaskDeleteRestorePayload(getUndoPayloadForAction(action));
 
   beforeEach(() => {
     mockReducer = jasmine.createSpy('reducer').and.callFake((state, action) => state);
@@ -282,12 +283,12 @@ describe('undoOperationPayloadMetaReducer task delete payload', () => {
   });
 
   // =============================================================================
-  // consumeUndoPayloadForAction() TESTS
+  // getUndoPayloadForAction() / clearUndoPayloadForAction() TESTS
   // =============================================================================
 
-  describe('consumeUndoPayloadForAction', () => {
+  describe('undo payload accessors', () => {
     it('should return null when no delete has occurred', () => {
-      const payload = consumeUndoPayloadForAction({ type: 'NO_DELETE' });
+      const payload = getUndoPayloadForAction({ type: 'NO_DELETE' });
       expect(payload).toBeNull();
     });
 
@@ -302,19 +303,30 @@ describe('undoOperationPayloadMetaReducer task delete payload', () => {
       expect(payload!.task.id).toBe('task1');
     });
 
-    it('should clear payload after retrieval', () => {
+    it('should not clear payload after retrieval', () => {
       const task = createMockTaskWithSubTasks();
       const action = TaskSharedActions.deleteTask({ task });
 
       metaReducer(baseState, action);
 
       // First retrieval should return payload
-      const payload1 = consumeUndoPayloadForAction(action);
+      const payload1 = getUndoPayloadForAction(action);
       expect(payload1).toBeDefined();
 
-      // Second retrieval should return null (cleared)
-      const payload2 = consumeUndoPayloadForAction(action);
-      expect(payload2).toBeNull();
+      // Second retrieval should still return payload for retry-safe persistence
+      const payload2 = getUndoPayloadForAction(action);
+      expect(payload2).toBeDefined();
+    });
+
+    it('should clear payload when explicitly requested', () => {
+      const task = createMockTaskWithSubTasks();
+      const action = TaskSharedActions.deleteTask({ task });
+
+      metaReducer(baseState, action);
+
+      clearUndoPayloadForAction(action);
+
+      expect(getUndoPayloadForAction(action)).toBeNull();
     });
 
     it('should keep separate payloads for separate delete actions', () => {
@@ -361,7 +373,7 @@ describe('undoOperationPayloadMetaReducer task delete payload', () => {
       expect(result).toBe(baseState);
 
       // Should not have captured anything
-      const payload = consumeUndoPayloadForAction(action);
+      const payload = getUndoPayloadForAction(action);
       expect(payload).toBeNull();
     });
   });
