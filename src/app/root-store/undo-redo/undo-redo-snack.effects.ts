@@ -14,39 +14,34 @@ export class UndoRedoSnackEffects {
   private readonly _snackService = inject(SnackService);
   private readonly _undoRedoService = inject(UndoRedoService);
 
-  undoSuccess$ = createEffect(
+  undoRedoSuccess$ = createEffect(
     () =>
       this._actions$.pipe(
-        ofType(UndoRedoActions.undoSuccess),
-        tap(({ label }) =>
+        ofType(UndoRedoActions.undoRedoSuccess),
+        tap(({ label, performedAction }) =>
           this._snackService.open({
             type: 'SUCCESS',
             msg: label,
             isSkipTranslate: true,
-            actionStr: label.startsWith('Undo ')
-              ? T.G.REDO
-              : label.startsWith('Redo ')
-                ? T.G.UNDO
-                : undefined,
-            actionFn: label.startsWith('Undo ')
-              ? () => {
-                  void this._undoRedoService.redo();
-                }
-              : label.startsWith('Redo ')
+            actionStr: performedAction === 'undo' ? T.G.REDO : T.G.UNDO,
+            actionFn:
+              performedAction === 'undo'
                 ? () => {
-                    void this._undoRedoService.undo();
+                    void this._undoRedoService.redo();
                   }
-                : undefined,
+                : () => {
+                    void this._undoRedoService.undo();
+                  },
           }),
         ),
       ),
     { dispatch: false },
   );
 
-  undoFailed$ = createEffect(
+  undoRedoFailed$ = createEffect(
     () =>
       this._actions$.pipe(
-        ofType(UndoRedoActions.undoFailed),
+        ofType(UndoRedoActions.undoRedoFailed),
         tap(({ error }) =>
           this._snackService.open({
             type: 'ERROR',

@@ -262,7 +262,7 @@ describe('UndoRedoService', () => {
       expect(result.error.code).toBe('MISSING_PAYLOAD');
     }
     expect(mockStore.dispatch).toHaveBeenCalledWith(
-      jasmine.objectContaining({ type: UndoRedoActions.undoFailed.type }),
+      jasmine.objectContaining({ type: UndoRedoActions.undoRedoFailed.type }),
     );
     expect(mockStore.dispatch).not.toHaveBeenCalledWith(
       jasmine.objectContaining({ type: UndoRedoActions.redo.type }),
@@ -295,7 +295,7 @@ describe('UndoRedoService', () => {
       expect(result.error).toBe(validationError);
     }
     expect(mockStore.dispatch).toHaveBeenCalledWith(
-      jasmine.objectContaining({ type: UndoRedoActions.undoFailed.type }),
+      jasmine.objectContaining({ type: UndoRedoActions.undoRedoFailed.type }),
     );
   });
 });

@@ -1,17 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { Action, Store } from '@ngrx/store';
-import { BehaviorSubject, firstValueFrom } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 import { take } from 'rxjs/operators';
 
 import { ActionType, Operation } from '../../op-log/core/operation.types';
 import { RootState } from '../root-state';
 import { UndoRedoActions } from './undo-redo.actions';
-import {
-  selectCanRedo,
-  selectCanUndo,
-  selectLastRedoOperation,
-  selectLastUndoOperation,
-} from './undo-redo.selectors';
+import { selectLastRedoOperation, selectLastUndoOperation } from './undo-redo.selectors';
 import {
   UndoRedoErrorCode,
   UndoRedoOperation,
@@ -40,20 +35,12 @@ export class UndoRedoService {
   private readonly _registry = inject(CompensatingOperationsRegistry);
   private readonly _validator = inject(UndoValidatorService);
 
-  private readonly _canUndo$ = new BehaviorSubject<boolean>(false);
-  readonly canUndo$ = this._canUndo$.asObservable();
-
-  private readonly _canRedo$ = new BehaviorSubject<boolean>(false);
-  readonly canRedo$ = this._canRedo$.asObservable();
-
-  constructor() {
-    void this.refreshCanUndo();
-  }
-
   async undo(): Promise<UndoRedoResult> {
     const candidate = await this._getLastStackCandidate(selectLastUndoOperation);
     const lastOp = candidate?.operation;
 
+    // Only the top operation can be undone. Skipping unsupported operations would
+    // break the linear history and could replay redo without intermediate updates.
     if (!lastOp) {
       return {
         success: false,
@@ -66,8 +53,7 @@ export class UndoRedoService {
 
     const validationError = this._validator.validateLastOperation(lastOp);
     if (validationError) {
-      await this.refreshCanUndo();
-      this._store.dispatch(UndoRedoActions.undoFailed({ error: validationError }));
+      this._store.dispatch(UndoRedoActions.undoRedoFailed({ error: validationError }));
       return {
         success: false,
         error: validationError,
@@ -77,8 +63,7 @@ export class UndoRedoService {
 
     const result = await this._registry.getCompensatingOp(lastOp);
     if ('code' in result) {
-      await this.refreshCanUndo();
-      this._store.dispatch(UndoRedoActions.undoFailed({ error: result }));
+      this._store.dispatch(UndoRedoActions.undoRedoFailed({ error: result }));
       return {
         success: false,
         error: result,
@@ -89,9 +74,11 @@ export class UndoRedoService {
     this._store.dispatch(UndoRedoActions.undo());
     this._store.dispatch(this._markAsCompensating(result.compensatingOp.action));
     this._store.dispatch(
-      UndoRedoActions.undoSuccess({ label: result.compensatingOp.label }),
+      UndoRedoActions.undoRedoSuccess({
+        label: result.compensatingOp.label,
+        performedAction: 'undo',
+      }),
     );
-    await this.refreshCanUndo();
 
     return {
       success: true,
@@ -116,8 +103,7 @@ export class UndoRedoService {
 
     const redoAction = await this._registry.convertOpToAction(lastRedoOp);
     if ('code' in redoAction) {
-      await this.refreshCanUndo();
-      this._store.dispatch(UndoRedoActions.undoFailed({ error: redoAction }));
+      this._store.dispatch(UndoRedoActions.undoRedoFailed({ error: redoAction }));
       return {
         success: false,
         error: redoAction,
@@ -129,8 +115,12 @@ export class UndoRedoService {
 
     this._store.dispatch(UndoRedoActions.redo());
     this._store.dispatch(this._markAsCompensating(redoAction));
-    this._store.dispatch(UndoRedoActions.undoSuccess({ label: undoRedoOperation.label }));
-    await this.refreshCanUndo();
+    this._store.dispatch(
+      UndoRedoActions.undoRedoSuccess({
+        label: undoRedoOperation.label,
+        performedAction: 'redo',
+      }),
+    );
 
     return {
       success: true,
@@ -141,13 +131,6 @@ export class UndoRedoService {
         action: redoAction,
       },
     };
-  }
-
-  async refreshCanUndo(): Promise<void> {
-    const canUndo = await firstValueFrom(this._store.select(selectCanUndo).pipe(take(1)));
-    const canRedo = await firstValueFrom(this._store.select(selectCanRedo).pipe(take(1)));
-    this._canUndo$.next(canUndo);
-    this._canRedo$.next(canRedo);
   }
 
   private _buildUndoRedoOperation(operation: Operation): UndoRedoOperation {

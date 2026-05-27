@@ -37,13 +37,13 @@ export const UndoRedoActions = createActionGroup({
     clearHistory: emptyProps(),
 
     /**
-     * Notify that undo succeeded.
+     * Notify that undo/redo succeeded.
      */
-    undoSuccess: props<{ label: string }>(),
+    undoRedoSuccess: props<{ label: string; performedAction: 'undo' | 'redo' }>(),
 
     /**
-     * Notify that undo failed.
+     * Notify that undo/redo failed.
      */
-    undoFailed: props<{ error: { message: string } }>(),
+    undoRedoFailed: props<{ error: { message: string } }>(),
   },
 });
