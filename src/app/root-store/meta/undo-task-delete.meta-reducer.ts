@@ -38,15 +38,18 @@ export interface RestoreDeletedTaskPayload {
   deletedTaskEntities: Dictionary<Task>;
 }
 
-let lastDeletePayload: RestoreDeletedTaskPayload | null = null;
+const deletePayloadByAction = new WeakMap<Action, RestoreDeletedTaskPayload>();
 
 /**
- * Gets and clears the last captured delete payload.
- * Used by the snackbar effect to dispatch restoreDeletedTask with full data.
+ * Gets and clears the delete payload captured for a specific deleteTask action.
+ * OperationLogEffects uses this to attach the restore payload to the persisted
+ * delete operation.
  */
-export const getLastDeletePayload = (): RestoreDeletedTaskPayload | null => {
-  const payload = lastDeletePayload;
-  lastDeletePayload = null;
+export const consumeDeletePayloadForAction = (
+  action: Action,
+): RestoreDeletedTaskPayload | null => {
+  const payload = deletePayloadByAction.get(action) ?? null;
+  deletePayloadByAction.delete(action);
   return payload;
 };
 
@@ -55,8 +58,8 @@ export const getLastDeletePayload = (): RestoreDeletedTaskPayload | null => {
  * This runs before the main reducer, allowing us to capture project/tag context
  * that would be lost after the delete reducer runs.
  *
- * The captured payload is retrieved via getLastDeletePayload() and used
- * by the snackbar effect to dispatch restoreDeletedTask with full data.
+ * The captured payload is attached to the dispatched action object and later
+ * copied into the persisted operation payload.
  */
 export const undoTaskDeleteMetaReducer = (
   reducer: ActionReducer<any, any>,
@@ -64,7 +67,7 @@ export const undoTaskDeleteMetaReducer = (
   return (state: RootState, action: Action) => {
     if (action.type === TaskSharedActions.deleteTask.type) {
       const { task } = action as ReturnType<typeof TaskSharedActions.deleteTask>;
-      lastDeletePayload = captureTaskDeletePayload(state, task);
+      deletePayloadByAction.set(action, captureTaskDeletePayload(state, task));
     }
     return reducer(state, action);
   };

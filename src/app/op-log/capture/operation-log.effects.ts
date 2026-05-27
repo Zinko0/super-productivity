@@ -33,6 +33,7 @@ import { SuperSyncStatusService } from '../sync/super-sync-status.service';
 import { DateService } from '../../core/date/date.service';
 import { Store } from '@ngrx/store';
 import { UndoRedoActions } from '../../root-store/undo-redo/undo-redo.actions';
+import { consumeDeletePayloadForAction } from '../../root-store/meta/undo-task-delete.meta-reducer';
 
 /**
  * NgRx Effects for persisting application state changes as operations to the
@@ -180,9 +181,13 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         const entityChanges = skipDequeue ? [] : this.operationCaptureService.dequeue();
 
         const operationTimestamp = Date.now();
-        const actionPayload = this.addReplayDateFieldsToActionPayload(
+        const payloadWithUndoSnapshot = this.addUndoRestoreSnapshotToDeletePayload(
           action,
           rawActionPayload,
+        );
+        const actionPayload = this.addReplayDateFieldsToActionPayload(
+          action,
+          payloadWithUndoSnapshot,
           operationTimestamp,
         );
 
@@ -323,6 +328,25 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         this.notifyUserAndTriggerRollback();
       }
     }
+  }
+
+  private addUndoRestoreSnapshotToDeletePayload(
+    action: PersistentAction,
+    rawActionPayload: Record<string, unknown>,
+  ): Record<string, unknown> {
+    if (action.type !== ActionType.TASK_SHARED_DELETE) {
+      return rawActionPayload;
+    }
+
+    const restoreDeletedTaskPayload = consumeDeletePayloadForAction(action);
+    if (!restoreDeletedTaskPayload) {
+      return rawActionPayload;
+    }
+
+    return {
+      ...rawActionPayload,
+      restoreDeletedTaskPayload,
+    };
   }
 
   /**

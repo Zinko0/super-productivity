@@ -15,7 +15,7 @@ import {
 } from './undo-redo.types';
 import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
 import { selectTaskByIdWithSubTaskData } from '../../features/tasks/store/task.selectors';
-import { getLastDeletePayload } from '../meta/undo-task-delete.meta-reducer';
+import { RestoreDeletedTaskPayload } from '../meta/undo-task-delete.meta-reducer';
 
 interface CompensatingOpBuildResult {
   operation: UndoRedoOperation;
@@ -178,7 +178,10 @@ export class CompensatingOperationsRegistry {
   private _compensateTaskDelete(
     op: Operation,
   ): Promise<CompensatingOpBuildResult | UndoRedoError> {
-    const restorePayload = getLastDeletePayload();
+    const payload = extractActionPayload(op.payload);
+    const restorePayload = payload.restoreDeletedTaskPayload as
+      | RestoreDeletedTaskPayload
+      | undefined;
 
     if (!restorePayload?.task?.id) {
       return Promise.resolve({
