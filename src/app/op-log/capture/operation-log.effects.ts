@@ -33,7 +33,10 @@ import { SuperSyncStatusService } from '../sync/super-sync-status.service';
 import { DateService } from '../../core/date/date.service';
 import { Store } from '@ngrx/store';
 import { UndoRedoActions } from '../../root-store/undo-redo/undo-redo.actions';
-import { consumeDeletePayloadForAction } from '../../root-store/meta/undo-task-delete.meta-reducer';
+import {
+  consumeUndoPayloadForAction,
+  UNDO_OPERATION_PAYLOAD_KEY,
+} from '../../root-store/meta/undo-operation-payload.meta-reducer';
 
 /**
  * NgRx Effects for persisting application state changes as operations to the
@@ -181,13 +184,13 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         const entityChanges = skipDequeue ? [] : this.operationCaptureService.dequeue();
 
         const operationTimestamp = Date.now();
-        const payloadWithUndoSnapshot = this.addUndoRestoreSnapshotToDeletePayload(
+        const payloadWithUndoPayload = this.addUndoPayloadToActionPayload(
           action,
           rawActionPayload,
         );
         const actionPayload = this.addReplayDateFieldsToActionPayload(
           action,
-          payloadWithUndoSnapshot,
+          payloadWithUndoPayload,
           operationTimestamp,
         );
 
@@ -330,22 +333,18 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
     }
   }
 
-  private addUndoRestoreSnapshotToDeletePayload(
+  private addUndoPayloadToActionPayload(
     action: PersistentAction,
     rawActionPayload: Record<string, unknown>,
   ): Record<string, unknown> {
-    if (action.type !== ActionType.TASK_SHARED_DELETE) {
-      return rawActionPayload;
-    }
-
-    const restoreDeletedTaskPayload = consumeDeletePayloadForAction(action);
-    if (!restoreDeletedTaskPayload) {
+    const undoPayload = consumeUndoPayloadForAction(action);
+    if (!undoPayload) {
       return rawActionPayload;
     }
 
     return {
       ...rawActionPayload,
-      restoreDeletedTaskPayload,
+      [UNDO_OPERATION_PAYLOAD_KEY]: undoPayload,
     };
   }
 

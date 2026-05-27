@@ -15,7 +15,8 @@ import {
 } from './undo-redo.types';
 import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
 import { selectTaskByIdWithSubTaskData } from '../../features/tasks/store/task.selectors';
-import { RestoreDeletedTaskPayload } from '../meta/undo-task-delete.meta-reducer';
+import { UNDO_OPERATION_PAYLOAD_KEY } from '../meta/undo-operation-payload.meta-reducer';
+import { isTaskDeleteUndoPayload } from '../meta/undo-task-delete.meta-reducer';
 
 interface CompensatingOpBuildResult {
   operation: UndoRedoOperation;
@@ -179,11 +180,9 @@ export class CompensatingOperationsRegistry {
     op: Operation,
   ): Promise<CompensatingOpBuildResult | UndoRedoError> {
     const payload = extractActionPayload(op.payload);
-    const restorePayload = payload.restoreDeletedTaskPayload as
-      | RestoreDeletedTaskPayload
-      | undefined;
+    const undoPayload = payload[UNDO_OPERATION_PAYLOAD_KEY];
 
-    if (!restorePayload?.task?.id) {
+    if (!isTaskDeleteUndoPayload(undoPayload)) {
       return Promise.resolve({
         code: UndoRedoErrorCode.MissingSnapshot,
         message:
@@ -196,7 +195,7 @@ export class CompensatingOperationsRegistry {
         op,
         operationType: UndoRedoOperationType.Delete,
         label: 'Undo task deletion',
-        action: TaskSharedActions.restoreDeletedTask(restorePayload),
+        action: TaskSharedActions.restoreDeletedTask(undoPayload.restorePayload),
       }),
     );
   }

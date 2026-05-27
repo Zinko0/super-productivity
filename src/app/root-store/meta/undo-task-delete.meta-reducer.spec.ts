@@ -1,6 +1,10 @@
 import {
-  undoTaskDeleteMetaReducer,
-  consumeDeletePayloadForAction,
+  consumeUndoPayloadForAction,
+  undoOperationPayloadMetaReducer,
+} from './undo-operation-payload.meta-reducer';
+import {
+  isTaskDeleteUndoPayload,
+  RestoreDeletedTaskPayload,
 } from './undo-task-delete.meta-reducer';
 import { TaskSharedActions } from './task-shared.actions';
 import { RootState } from '../root-state';
@@ -14,7 +18,7 @@ import { Action, ActionReducer } from '@ngrx/store';
 import { DEFAULT_PROJECT } from '../../features/project/project.const';
 import { DEFAULT_TAG, TODAY_TAG } from '../../features/tag/tag.const';
 
-describe('undoTaskDeleteMetaReducer', () => {
+describe('undoOperationPayloadMetaReducer task delete payload', () => {
   let mockReducer: jasmine.Spy;
   let metaReducer: ActionReducer<any, Action>;
   let baseState: RootState;
@@ -94,9 +98,22 @@ describe('undoTaskDeleteMetaReducer', () => {
       ...overrides.otherState,
     }) as any;
 
+  const expectTaskDeleteRestorePayload = (
+    payload: unknown,
+  ): RestoreDeletedTaskPayload => {
+    expect(isTaskDeleteUndoPayload(payload)).toBeTrue();
+    if (!isTaskDeleteUndoPayload(payload)) {
+      throw new Error('Expected task delete undo payload');
+    }
+    return payload.restorePayload;
+  };
+
+  const getTaskDeleteRestorePayload = (action: Action): RestoreDeletedTaskPayload =>
+    expectTaskDeleteRestorePayload(consumeUndoPayloadForAction(action));
+
   beforeEach(() => {
     mockReducer = jasmine.createSpy('reducer').and.callFake((state, action) => state);
-    metaReducer = undoTaskDeleteMetaReducer(mockReducer);
+    metaReducer = undoOperationPayloadMetaReducer(mockReducer);
     baseState = createMockState();
   });
 
@@ -120,7 +137,7 @@ describe('undoTaskDeleteMetaReducer', () => {
       const action = TaskSharedActions.deleteTask({ task });
 
       metaReducer(baseState, action);
-      const payload = consumeDeletePayloadForAction(action);
+      const payload = getTaskDeleteRestorePayload(action);
 
       expect(payload).toBeDefined();
       expect(payload!.task).toEqual(task);
@@ -132,7 +149,7 @@ describe('undoTaskDeleteMetaReducer', () => {
       const action = TaskSharedActions.deleteTask({ task });
 
       metaReducer(baseState, action);
-      const payload = consumeDeletePayloadForAction(action);
+      const payload = getTaskDeleteRestorePayload(action);
 
       expect(payload!.projectContext).toBeDefined();
       expect(payload!.projectContext!.projectId).toBe('project1');
@@ -154,7 +171,7 @@ describe('undoTaskDeleteMetaReducer', () => {
       const action = TaskSharedActions.deleteTask({ task: subTask });
 
       metaReducer(state, action);
-      const payload = consumeDeletePayloadForAction(action);
+      const payload = getTaskDeleteRestorePayload(action);
 
       expect(payload!.parentContext).toBeDefined();
       expect(payload!.parentContext!.parentTaskId).toBe('parentTask');
@@ -166,7 +183,7 @@ describe('undoTaskDeleteMetaReducer', () => {
       const action = TaskSharedActions.deleteTask({ task });
 
       metaReducer(baseState, action);
-      const payload = consumeDeletePayloadForAction(action);
+      const payload = getTaskDeleteRestorePayload(action);
 
       expect(payload!.tagTaskIdMap['tag1']).toBeDefined();
       expect(payload!.tagTaskIdMap['tag1']).toContain('task1');
@@ -205,7 +222,7 @@ describe('undoTaskDeleteMetaReducer', () => {
 
       const action = TaskSharedActions.deleteTask({ task });
       metaReducer(state, action);
-      const payload = consumeDeletePayloadForAction(action);
+      const payload = getTaskDeleteRestorePayload(action);
 
       // Check all entities are captured
       expect(payload!.deletedTaskEntities['task1']).toBeDefined();
@@ -226,7 +243,7 @@ describe('undoTaskDeleteMetaReducer', () => {
 
       expect(() => metaReducer(baseState, action)).not.toThrow();
 
-      const payload = consumeDeletePayloadForAction(action);
+      const payload = getTaskDeleteRestorePayload(action);
       expect(payload).toBeDefined();
       expect(payload!.task.id).toBe('task1');
     });
@@ -248,7 +265,7 @@ describe('undoTaskDeleteMetaReducer', () => {
       const action = TaskSharedActions.deleteTask({ task });
 
       metaReducer(baseState, action);
-      const payload = consumeDeletePayloadForAction(action);
+      const payload = getTaskDeleteRestorePayload(action);
 
       expect(payload!.projectContext).toBeUndefined();
     });
@@ -258,19 +275,19 @@ describe('undoTaskDeleteMetaReducer', () => {
       const action = TaskSharedActions.deleteTask({ task });
 
       metaReducer(baseState, action);
-      const payload = consumeDeletePayloadForAction(action);
+      const payload = getTaskDeleteRestorePayload(action);
 
       expect(payload!.projectContext).toBeUndefined();
     });
   });
 
   // =============================================================================
-  // consumeDeletePayloadForAction() TESTS
+  // consumeUndoPayloadForAction() TESTS
   // =============================================================================
 
-  describe('consumeDeletePayloadForAction', () => {
+  describe('consumeUndoPayloadForAction', () => {
     it('should return null when no delete has occurred', () => {
-      const payload = consumeDeletePayloadForAction({ type: 'NO_DELETE' });
+      const payload = consumeUndoPayloadForAction({ type: 'NO_DELETE' });
       expect(payload).toBeNull();
     });
 
@@ -279,7 +296,7 @@ describe('undoTaskDeleteMetaReducer', () => {
       const action = TaskSharedActions.deleteTask({ task });
 
       metaReducer(baseState, action);
-      const payload = consumeDeletePayloadForAction(action);
+      const payload = getTaskDeleteRestorePayload(action);
 
       expect(payload).toBeDefined();
       expect(payload!.task.id).toBe('task1');
@@ -292,11 +309,11 @@ describe('undoTaskDeleteMetaReducer', () => {
       metaReducer(baseState, action);
 
       // First retrieval should return payload
-      const payload1 = consumeDeletePayloadForAction(action);
+      const payload1 = consumeUndoPayloadForAction(action);
       expect(payload1).toBeDefined();
 
       // Second retrieval should return null (cleared)
-      const payload2 = consumeDeletePayloadForAction(action);
+      const payload2 = consumeUndoPayloadForAction(action);
       expect(payload2).toBeNull();
     });
 
@@ -323,8 +340,8 @@ describe('undoTaskDeleteMetaReducer', () => {
       metaReducer(state, action1);
       metaReducer(state, action2);
 
-      const payload1 = consumeDeletePayloadForAction(action1);
-      const payload2 = consumeDeletePayloadForAction(action2);
+      const payload1 = getTaskDeleteRestorePayload(action1);
+      const payload2 = getTaskDeleteRestorePayload(action2);
 
       expect(payload1!.task.id).toBe('task1');
       expect(payload2!.task.id).toBe('task2');
@@ -344,7 +361,7 @@ describe('undoTaskDeleteMetaReducer', () => {
       expect(result).toBe(baseState);
 
       // Should not have captured anything
-      const payload = consumeDeletePayloadForAction(action);
+      const payload = consumeUndoPayloadForAction(action);
       expect(payload).toBeNull();
     });
   });
