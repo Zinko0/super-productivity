@@ -140,9 +140,7 @@ export class CompensatingOperationsRegistry {
     return this._buildDeleteCompensation(op, task.id, 'Undo task creation');
   }
 
-  /** Undo subtask creation by generating a delete compensation.
-   * IMPORTANT: Validates that subtask is still linked to parent before proceeding.
-   */
+  /** Undo subtask creation by generating a delete compensation.*/
   private async _compensateSubTaskCreate(
     op: Operation,
   ): Promise<CompensatingOpBuildResult | UndoRedoError> {
@@ -188,9 +186,7 @@ export class CompensatingOperationsRegistry {
     });
   }
 
-  /** Redo subtask creation by reconstructing the original add action.
-   * NOTE: Task payload has been merged with any initial update changes in coalescing phase.
-   */
+  /** Redo subtask creation by reconstructing the original add action.*/
   private async _redoSubTaskCreate(op: Operation): Promise<Action | UndoRedoError> {
     const payload = extractActionPayload(op.payload);
     const task = payload.task as Task | undefined;
@@ -280,9 +276,7 @@ export class CompensatingOperationsRegistry {
     return actionPayload.task as Task | undefined;
   }
 
-  /** Undo task update by reconstructing previous values from snapshot.
-   * IMPORTANT: Snapshot must be captured in undo-task-update meta-reducer before state mutation.
-   */
+  /** Undo task update by reconstructing previous values from snapshot.*/
   private async _compensateTaskUpdate(
     op: Operation,
   ): Promise<CompensatingOpBuildResult | UndoRedoError> {
@@ -328,9 +322,7 @@ export class CompensatingOperationsRegistry {
     });
   }
 
-  /** Undo task deletion by generating a restore compensation.
-   * IMPORTANT: Snapshot must be captured in undo-task-delete meta-reducer before deletion.
-   */
+  /** Undo task deletion by generating a restore compensation.*/
   private _compensateTaskDelete(
     op: Operation,
   ): Promise<CompensatingOpBuildResult | UndoRedoError> {
