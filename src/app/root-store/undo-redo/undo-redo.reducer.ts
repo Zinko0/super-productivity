@@ -3,6 +3,11 @@ import { ActionType } from '../../op-log/core/operation.types';
 import { UndoRedoState, initialUndoRedoState } from './undo-redo.state';
 import { UndoRedoActions } from './undo-redo.actions';
 
+/**
+ * Extracts the action payload from an operation payload structure.
+ * Handles both wrapped format (MultiEntityPayload with actionPayload field)
+ * and direct payload format (raw action properties).
+ */
 const extractActionPayload = (payload: unknown): Record<string, unknown> => {
   if (!payload || typeof payload !== 'object') {
     return {};
@@ -17,6 +22,14 @@ const extractActionPayload = (payload: unknown): Record<string, unknown> => {
   return payloadRecord;
 };
 
+/**
+ * Merges initial subtask update changes into the create operation payload.
+ * When a subtask is created with an immediate update (e.g., setting the title),
+ * we fuse both operations into one create payload. This ensures redo reconstructs
+ * the subtask with full field data instead of replaying create + update separately.
+ *
+ * IMPORTANT: This preserves all fields (title, description, etc.) during redo.
+ */
 const mergeInitialSubTaskUpdateIntoCreatePayload = (
   createOperation: { payload: unknown },
   updateOperation: { payload: unknown },
@@ -61,16 +74,17 @@ const mergeInitialSubTaskUpdateIntoCreatePayload = (
   return mergedActionPayload;
 };
 
+/**
+ * Reducer managing undo/redo stacks and operation coalescing.
+ *
+ * Key Pattern: Coalescing of TASK_ADD_SUB + immediate TASK_SHARED_UPDATE.
+ * When a subtask is created and immediately updated in the same interaction,
+ * we merge the operations to simplify undo/redo logic and ensure full fidelity on replay.
+ */
 export const undoRedoReducer = createReducer(
   initialUndoRedoState,
-
-  // Add operation to undo stack
   on(UndoRedoActions.addToUndoStack, (state: UndoRedoState, { operation }) => {
     const previousTop = state.undoStack[0];
-    // Creating a subtask can be followed immediately by an initial update
-    // (for example when short syntax or inline editing fills in the final data).
-    // Keep this as one undoable operation so redo recreates the subtask with the
-    // final payload instead of replaying an empty create plus a separate update.
     const isInitialSubTaskUpdate =
       operation.actionType === ActionType.TASK_SHARED_UPDATE &&
       previousTop?.actionType === ActionType.TASK_ADD_SUB &&
@@ -96,7 +110,6 @@ export const undoRedoReducer = createReducer(
 
     const undoStack = [operation, ...state.undoStack];
 
-    // Limit history size
     if (undoStack.length > state.maxHistorySize) {
       undoStack.pop();
     }
@@ -104,11 +117,10 @@ export const undoRedoReducer = createReducer(
     return {
       ...state,
       undoStack,
-      redoStack: [], // Clear redo stack on new action
+      redoStack: [],
     };
   }),
 
-  // Undo: move from undoStack to redoStack
   on(UndoRedoActions.undo, (state) => {
     if (state.undoStack.length === 0) return state;
 
@@ -118,7 +130,6 @@ export const undoRedoReducer = createReducer(
     return { ...state, undoStack: remainingUndo, redoStack };
   }),
 
-  // Redo: move from redoStack to undoStack
   on(UndoRedoActions.redo, (state) => {
     if (state.redoStack.length === 0) return state;
 
@@ -128,7 +139,6 @@ export const undoRedoReducer = createReducer(
     return { ...state, redoStack: remainingRedo, undoStack };
   }),
 
-  // Clear history
   on(UndoRedoActions.clearHistory, () => {
     return initialUndoRedoState;
   }),

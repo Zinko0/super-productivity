@@ -27,6 +27,13 @@ type ActionWithMeta = Action & {
   };
 };
 
+/**
+ * Service responsible for orchestrating undo/redo flow.
+ * Coordinates between validator, registry, and store to execute compensating operations.
+ *
+ * NOTE: Undo/Redo maintains strict linear history. Only the topmost operation can be undone
+ * or redone. Intermediate operations cannot be skipped to prevent replay fidelity issues.
+ */
 @Injectable({
   providedIn: 'root',
 })
@@ -35,6 +42,9 @@ export class UndoRedoService {
   private readonly _registry = inject(CompensatingOperationsRegistry);
   private readonly _validator = inject(UndoValidatorService);
 
+  /** Attempts to undo the last operation on the undo stack.
+   * IMPORTANT: Only the topmost operation can be undone to maintain linear history.
+   */
   async undo(): Promise<UndoRedoResult> {
     const candidate = await this._getLastStackCandidate(selectLastUndoOperation);
     const lastOp = candidate?.operation;
@@ -87,6 +97,9 @@ export class UndoRedoService {
     };
   }
 
+  /** Attempts to redo the last operation on the redo stack.
+   * IMPORTANT: Only the topmost operation can be redone to maintain linear history.
+   */
   async redo(): Promise<UndoRedoResult> {
     const candidate = await this._getLastStackCandidate(selectLastRedoOperation);
     const lastRedoOp = candidate?.operation;
@@ -133,6 +146,7 @@ export class UndoRedoService {
     };
   }
 
+  /** Builds operation metadata from raw operation based on action type. */
   private _buildUndoRedoOperation(operation: Operation): UndoRedoOperation {
     return {
       originalOperation: operation,
@@ -147,6 +161,7 @@ export class UndoRedoService {
     };
   }
 
+  /** Retrieves the topmost operation from either undo or redo stack. */
   private async _getLastStackCandidate(
     selector: typeof selectLastUndoOperation | typeof selectLastRedoOperation,
   ): Promise<UndoCandidate | undefined> {
@@ -158,6 +173,7 @@ export class UndoRedoService {
     return undefined;
   }
 
+  /** Marks action with compensating flag so it won't be re-logged to operation-log. */
   private _markAsCompensating(action: Action): ActionWithMeta {
     const actionWithMeta = action as ActionWithMeta;
 

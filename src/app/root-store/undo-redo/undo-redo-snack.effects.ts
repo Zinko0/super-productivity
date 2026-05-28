@@ -9,11 +9,18 @@ import { UndoRedoService } from './undo-redo.service';
 import { T } from '../../t.const';
 
 @Injectable()
+/**
+ * Handles snack bar notifications for undo/redo results.
+ *
+ * NOTE: The success snack offers the inverse action (undo ↔ redo) so the user
+ * can quickly revert the last undo/redo without navigating the history UI.
+ */
 export class UndoRedoSnackEffects {
   private readonly _actions$ = inject(LOCAL_ACTIONS);
   private readonly _snackService = inject(SnackService);
   private readonly _undoRedoService = inject(UndoRedoService);
 
+  /** Shows a success snack after undo/redo and wires the opposite action. */
   undoRedoSuccess$ = createEffect(
     () =>
       this._actions$.pipe(
@@ -38,6 +45,7 @@ export class UndoRedoSnackEffects {
     { dispatch: false },
   );
 
+  /** Shows an error snack when undo/redo fails. */
   undoRedoFailed$ = createEffect(
     () =>
       this._actions$.pipe(

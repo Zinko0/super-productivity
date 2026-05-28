@@ -298,4 +298,905 @@ describe('UndoRedoService', () => {
       jasmine.objectContaining({ type: UndoRedoActions.undoRedoFailed.type }),
     );
   });
+
+  describe('Specific Operation Type Undo Tests', () => {
+    it('should undo TASK_SHARED_ADD by generating a delete compensation', async () => {
+      const addOp = createOp({
+        id: 'op-add-task',
+        actionType: ActionType.TASK_SHARED_ADD,
+        entityId: 'task-123',
+        payload: {
+          actionPayload: {
+            task: {
+              id: 'task-123',
+              title: 'Test Task',
+              isDone: false,
+            },
+          },
+        },
+      });
+
+      mockStore.select.and.callFake((selector: any) => {
+        if (selector === selectLastUndoOperation) {
+          return of(addOp);
+        }
+        if (selector === selectCanUndo) {
+          return of(true);
+        }
+        if (selector === selectCanRedo) {
+          return of(false);
+        }
+        return of(undefined);
+      });
+
+      mockValidator.validateLastOperation.and.returnValue(null);
+
+      mockRegistry.getCompensatingOp.and.returnValue(
+        Promise.resolve({
+          operation: {
+            originalOperation: addOp,
+            operationType: UndoRedoOperationType.Create,
+            actionType: ActionType.TASK_SHARED_ADD,
+            label: 'Undo task creation',
+          },
+          compensatingOp: {
+            originalOperationId: addOp.id,
+            label: 'Undo task creation',
+            action: {
+              type: '[Task] Delete',
+              payload: {
+                task: { id: 'task-123', title: 'Test Task' },
+              },
+            } as any,
+          },
+        }),
+      );
+
+      const result = await service.undo();
+
+      expect(result.success).toBeTrue();
+      if (result.success && result.operation && 'operationType' in result.operation) {
+        expect((result.operation as any).operationType).toBe(
+          UndoRedoOperationType.Create,
+        );
+      }
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: '[Task] Delete' }),
+      );
+    });
+
+    it('should undo TASK_SHARED_DELETE by generating a restore compensation', async () => {
+      const deleteOp = createOp({
+        id: 'op-delete-task',
+        actionType: ActionType.TASK_SHARED_DELETE,
+        entityId: 'task-456',
+        payload: {
+          actionPayload: {
+            task: {
+              id: 'task-456',
+              title: 'Deleted Task',
+              isDone: true,
+            },
+          },
+        },
+      });
+
+      mockStore.select.and.callFake((selector: any) => {
+        if (selector === selectLastUndoOperation) {
+          return of(deleteOp);
+        }
+        if (selector === selectCanUndo) {
+          return of(true);
+        }
+        if (selector === selectCanRedo) {
+          return of(false);
+        }
+        return of(undefined);
+      });
+
+      mockValidator.validateLastOperation.and.returnValue(null);
+
+      mockRegistry.getCompensatingOp.and.returnValue(
+        Promise.resolve({
+          operation: {
+            originalOperation: deleteOp,
+            operationType: UndoRedoOperationType.Delete,
+            actionType: ActionType.TASK_SHARED_DELETE,
+            label: 'Undo task deletion',
+          },
+          compensatingOp: {
+            originalOperationId: deleteOp.id,
+            label: 'Undo task deletion',
+            action: {
+              type: '[Task] Restore',
+              payload: {
+                task: { id: 'task-456', title: 'Deleted Task' },
+              },
+            } as any,
+          },
+        }),
+      );
+
+      const result = await service.undo();
+
+      expect(result.success).toBeTrue();
+      if (result.success && result.operation && 'operationType' in result.operation) {
+        expect((result.operation as any).operationType).toBe(
+          UndoRedoOperationType.Delete,
+        );
+      }
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: '[Task] Restore' }),
+      );
+    });
+
+    it('should undo TASK_ADD_SUB (create subtask) by generating a delete compensation', async () => {
+      const addSubOp = createOp({
+        id: 'op-add-sub',
+        actionType: ActionType.TASK_ADD_SUB,
+        entityId: 'sub-789',
+        payload: {
+          actionPayload: {
+            parentId: 'parent-task',
+            task: {
+              id: 'sub-789',
+              title: 'New Subtask',
+              isDone: false,
+            },
+          },
+        },
+      });
+
+      mockStore.select.and.callFake((selector: any) => {
+        if (selector === selectLastUndoOperation) {
+          return of(addSubOp);
+        }
+        if (selector === selectCanUndo) {
+          return of(true);
+        }
+        if (selector === selectCanRedo) {
+          return of(false);
+        }
+        return of(undefined);
+      });
+
+      mockValidator.validateLastOperation.and.returnValue(null);
+
+      mockRegistry.getCompensatingOp.and.returnValue(
+        Promise.resolve({
+          operation: {
+            originalOperation: addSubOp,
+            operationType: UndoRedoOperationType.Create,
+            actionType: ActionType.TASK_ADD_SUB,
+            label: 'Undo sub task creation',
+          },
+          compensatingOp: {
+            originalOperationId: addSubOp.id,
+            label: 'Undo sub task creation',
+            action: {
+              type: '[Task] Delete',
+              payload: {
+                task: {
+                  id: 'sub-789',
+                  title: 'New Subtask',
+                  parentId: 'parent-task',
+                },
+              },
+            } as any,
+          },
+        }),
+      );
+
+      const result = await service.undo();
+
+      expect(result.success).toBeTrue();
+      if (result.success && result.operation && 'operationType' in result.operation) {
+        expect((result.operation as any).operationType).toBe(
+          UndoRedoOperationType.Create,
+        );
+      }
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: '[Task] Delete' }),
+      );
+    });
+
+    it('should undo TASK_SHARED_UPDATE by restoring previous values from snapshot', async () => {
+      const updateOp = createOp({
+        id: 'op-update-task',
+        actionType: ActionType.TASK_SHARED_UPDATE,
+        entityId: 'task-999',
+        payload: {
+          actionPayload: {
+            task: {
+              id: 'task-999',
+              changes: {
+                title: 'Updated Title',
+                isDone: true,
+              },
+            },
+            [Symbol.for('UNDO_OPERATION_PAYLOAD_KEY')]: {
+              snapshot: {
+                previousValues: {
+                  title: { value: 'Original Title', wasPresent: true },
+                  isDone: { value: false, wasPresent: true },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      mockStore.select.and.callFake((selector: any) => {
+        if (selector === selectLastUndoOperation) {
+          return of(updateOp);
+        }
+        if (selector === selectCanUndo) {
+          return of(true);
+        }
+        if (selector === selectCanRedo) {
+          return of(false);
+        }
+        return of(undefined);
+      });
+
+      mockValidator.validateLastOperation.and.returnValue(null);
+
+      mockRegistry.getCompensatingOp.and.returnValue(
+        Promise.resolve({
+          operation: {
+            originalOperation: updateOp,
+            operationType: UndoRedoOperationType.Update,
+            actionType: ActionType.TASK_SHARED_UPDATE,
+            label: 'Undo task update',
+          },
+          compensatingOp: {
+            originalOperationId: updateOp.id,
+            label: 'Undo task update',
+            action: {
+              type: '[Task] Update',
+              payload: {
+                task: {
+                  id: 'task-999',
+                  changes: {
+                    title: 'Original Title',
+                    isDone: false,
+                  },
+                },
+              },
+            } as any,
+          },
+        }),
+      );
+
+      const result = await service.undo();
+
+      expect(result.success).toBeTrue();
+      if (result.success && result.operation && 'operationType' in result.operation) {
+        expect((result.operation as any).operationType).toBe(
+          UndoRedoOperationType.Update,
+        );
+      }
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: '[Task] Update' }),
+      );
+    });
+
+    it('should redo TASK_SHARED_ADD by reconstructing the original add action', async () => {
+      const addOp = createOp({
+        id: 'op-add-task-redo',
+        actionType: ActionType.TASK_SHARED_ADD,
+        entityId: 'task-123',
+        payload: {
+          actionPayload: {
+            task: {
+              id: 'task-123',
+              title: 'Test Task for Redo',
+              isDone: false,
+            },
+            workContextId: 'TODAY',
+            workContextType: 'WORK_CONTEXT',
+          },
+        },
+      });
+
+      mockStore.select.and.callFake((selector: any) => {
+        if (selector === selectLastRedoOperation) {
+          return of(addOp);
+        }
+        if (selector === selectCanUndo) {
+          return of(false);
+        }
+        if (selector === selectCanRedo) {
+          return of(true);
+        }
+        return of(undefined);
+      });
+
+      mockRegistry.convertOpToAction.and.returnValue(
+        Promise.resolve({
+          type: '[Task] Add',
+          payload: {
+            task: { id: 'task-123', title: 'Test Task for Redo' },
+            workContextId: 'TODAY',
+          },
+        } as any),
+      );
+
+      const result = await service.redo();
+
+      expect(result.success).toBeTrue();
+      if (result.success && result.compensatingOp) {
+        expect(result.compensatingOp.originalOperationId).toBe(addOp.id);
+      }
+      expect(mockRegistry.convertOpToAction).toHaveBeenCalledWith(addOp);
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: '[Task] Add' }),
+      );
+    });
+
+    it('should redo TASK_SHARED_DELETE by reconstructing the original delete action', async () => {
+      const deleteOp = createOp({
+        id: 'op-delete-task-redo',
+        actionType: ActionType.TASK_SHARED_DELETE,
+        entityId: 'task-456',
+        payload: {
+          actionPayload: {
+            task: {
+              id: 'task-456',
+              title: 'Task to Delete for Redo',
+              isDone: false,
+            },
+          },
+        },
+      });
+
+      mockStore.select.and.callFake((selector: any) => {
+        if (selector === selectLastRedoOperation) {
+          return of(deleteOp);
+        }
+        if (selector === selectCanUndo) {
+          return of(false);
+        }
+        if (selector === selectCanRedo) {
+          return of(true);
+        }
+        return of(undefined);
+      });
+
+      mockRegistry.convertOpToAction.and.returnValue(
+        Promise.resolve({
+          type: '[Task] Delete',
+          payload: {
+            task: { id: 'task-456', title: 'Task to Delete for Redo' },
+          },
+        } as any),
+      );
+
+      const result = await service.redo();
+
+      expect(result.success).toBeTrue();
+      if (result.success && result.compensatingOp) {
+        expect(result.compensatingOp.originalOperationId).toBe(deleteOp.id);
+      }
+      expect(mockRegistry.convertOpToAction).toHaveBeenCalledWith(deleteOp);
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: '[Task] Delete' }),
+      );
+    });
+
+    it('should redo TASK_ADD_SUB (create subtask) by reconstructing the original add action', async () => {
+      const addSubOp = createOp({
+        id: 'op-add-sub-redo',
+        actionType: ActionType.TASK_ADD_SUB,
+        entityId: 'sub-789',
+        payload: {
+          actionPayload: {
+            parentId: 'parent-task',
+            task: {
+              id: 'sub-789',
+              title: 'Subtask for Redo',
+              isDone: false,
+            },
+          },
+        },
+      });
+
+      mockStore.select.and.callFake((selector: any) => {
+        if (selector === selectLastRedoOperation) {
+          return of(addSubOp);
+        }
+        if (selector === selectCanUndo) {
+          return of(false);
+        }
+        if (selector === selectCanRedo) {
+          return of(true);
+        }
+        return of(undefined);
+      });
+
+      mockRegistry.convertOpToAction.and.returnValue(
+        Promise.resolve({
+          type: '[Task] Add Subtask',
+          payload: {
+            parentId: 'parent-task',
+            task: { id: 'sub-789', title: 'Subtask for Redo' },
+          },
+        } as any),
+      );
+
+      const result = await service.redo();
+
+      expect(result.success).toBeTrue();
+      if (result.success && result.compensatingOp) {
+        expect(result.compensatingOp.originalOperationId).toBe(addSubOp.id);
+      }
+      expect(mockRegistry.convertOpToAction).toHaveBeenCalledWith(addSubOp);
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: '[Task] Add Subtask' }),
+      );
+    });
+
+    it('should redo TASK_SHARED_UPDATE by reconstructing the original update action', async () => {
+      const updateOp = createOp({
+        id: 'op-update-task-redo',
+        actionType: ActionType.TASK_SHARED_UPDATE,
+        entityId: 'task-999',
+        payload: {
+          actionPayload: {
+            task: {
+              id: 'task-999',
+              changes: {
+                title: 'Updated Title for Redo',
+                isDone: true,
+              },
+            },
+          },
+        },
+      });
+
+      mockStore.select.and.callFake((selector: any) => {
+        if (selector === selectLastRedoOperation) {
+          return of(updateOp);
+        }
+        if (selector === selectCanUndo) {
+          return of(false);
+        }
+        if (selector === selectCanRedo) {
+          return of(true);
+        }
+        return of(undefined);
+      });
+
+      mockRegistry.convertOpToAction.and.returnValue(
+        Promise.resolve({
+          type: '[Task] Update',
+          payload: {
+            task: {
+              id: 'task-999',
+              changes: {
+                title: 'Updated Title for Redo',
+                isDone: true,
+              },
+            },
+          },
+        } as any),
+      );
+
+      const result = await service.redo();
+
+      expect(result.success).toBeTrue();
+      if (result.success && result.compensatingOp) {
+        expect(result.compensatingOp.originalOperationId).toBe(updateOp.id);
+      }
+      expect(mockRegistry.convertOpToAction).toHaveBeenCalledWith(updateOp);
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: '[Task] Update' }),
+      );
+    });
+
+    it('should undo TASK_SHARED_UPDATE changing title field', async () => {
+      const updateTitleOp = createOp({
+        id: 'op-update-title',
+        actionType: ActionType.TASK_SHARED_UPDATE,
+        entityId: 'task-title',
+        payload: {
+          actionPayload: {
+            task: {
+              id: 'task-title',
+              changes: {
+                title: 'New Title',
+              },
+            },
+            [Symbol.for('UNDO_OPERATION_PAYLOAD_KEY')]: {
+              snapshot: {
+                previousValues: {
+                  title: { value: 'Old Title', wasPresent: true },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      mockStore.select.and.callFake((selector: any) => {
+        if (selector === selectLastUndoOperation) {
+          return of(updateTitleOp);
+        }
+        if (selector === selectCanUndo) {
+          return of(true);
+        }
+        if (selector === selectCanRedo) {
+          return of(false);
+        }
+        return of(undefined);
+      });
+
+      mockValidator.validateLastOperation.and.returnValue(null);
+
+      mockRegistry.getCompensatingOp.and.returnValue(
+        Promise.resolve({
+          operation: {
+            originalOperation: updateTitleOp,
+            operationType: UndoRedoOperationType.Update,
+            actionType: ActionType.TASK_SHARED_UPDATE,
+            label: 'Undo title change',
+          },
+          compensatingOp: {
+            originalOperationId: updateTitleOp.id,
+            label: 'Undo title change',
+            action: {
+              type: '[Task] Update',
+              payload: {
+                task: {
+                  id: 'task-title',
+                  changes: { title: 'Old Title' },
+                },
+              },
+            } as any,
+          },
+        }),
+      );
+
+      const result = await service.undo();
+
+      expect(result.success).toBeTrue();
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[Task] Update',
+          payload: jasmine.objectContaining({
+            task: jasmine.objectContaining({
+              changes: jasmine.objectContaining({ title: 'Old Title' }),
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('should undo TASK_SHARED_UPDATE changing isDone field', async () => {
+      const updateDoneOp = createOp({
+        id: 'op-update-done',
+        actionType: ActionType.TASK_SHARED_UPDATE,
+        entityId: 'task-done',
+        payload: {
+          actionPayload: {
+            task: {
+              id: 'task-done',
+              changes: {
+                isDone: true,
+              },
+            },
+            [Symbol.for('UNDO_OPERATION_PAYLOAD_KEY')]: {
+              snapshot: {
+                previousValues: {
+                  isDone: { value: false, wasPresent: true },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      mockStore.select.and.callFake((selector: any) => {
+        if (selector === selectLastUndoOperation) {
+          return of(updateDoneOp);
+        }
+        if (selector === selectCanUndo) {
+          return of(true);
+        }
+        if (selector === selectCanRedo) {
+          return of(false);
+        }
+        return of(undefined);
+      });
+
+      mockValidator.validateLastOperation.and.returnValue(null);
+
+      mockRegistry.getCompensatingOp.and.returnValue(
+        Promise.resolve({
+          operation: {
+            originalOperation: updateDoneOp,
+            operationType: UndoRedoOperationType.Update,
+            actionType: ActionType.TASK_SHARED_UPDATE,
+            label: 'Undo done status change',
+          },
+          compensatingOp: {
+            originalOperationId: updateDoneOp.id,
+            label: 'Undo done status change',
+            action: {
+              type: '[Task] Update',
+              payload: {
+                task: {
+                  id: 'task-done',
+                  changes: { isDone: false },
+                },
+              },
+            } as any,
+          },
+        }),
+      );
+
+      const result = await service.undo();
+
+      expect(result.success).toBeTrue();
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[Task] Update',
+          payload: jasmine.objectContaining({
+            task: jasmine.objectContaining({
+              changes: jasmine.objectContaining({ isDone: false }),
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('should undo TASK_SHARED_UPDATE changing timeEstimate field', async () => {
+      const updateEstimateOp = createOp({
+        id: 'op-update-estimate',
+        actionType: ActionType.TASK_SHARED_UPDATE,
+        entityId: 'task-estimate',
+        payload: {
+          actionPayload: {
+            task: {
+              id: 'task-estimate',
+              changes: {
+                timeEstimate: 3600,
+              },
+            },
+            [Symbol.for('UNDO_OPERATION_PAYLOAD_KEY')]: {
+              snapshot: {
+                previousValues: {
+                  timeEstimate: { value: 1800, wasPresent: true },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      mockStore.select.and.callFake((selector: any) => {
+        if (selector === selectLastUndoOperation) {
+          return of(updateEstimateOp);
+        }
+        if (selector === selectCanUndo) {
+          return of(true);
+        }
+        if (selector === selectCanRedo) {
+          return of(false);
+        }
+        return of(undefined);
+      });
+
+      mockValidator.validateLastOperation.and.returnValue(null);
+
+      mockRegistry.getCompensatingOp.and.returnValue(
+        Promise.resolve({
+          operation: {
+            originalOperation: updateEstimateOp,
+            operationType: UndoRedoOperationType.Update,
+            actionType: ActionType.TASK_SHARED_UPDATE,
+            label: 'Undo time estimate change',
+          },
+          compensatingOp: {
+            originalOperationId: updateEstimateOp.id,
+            label: 'Undo time estimate change',
+            action: {
+              type: '[Task] Update',
+              payload: {
+                task: {
+                  id: 'task-estimate',
+                  changes: { timeEstimate: 1800 },
+                },
+              },
+            } as any,
+          },
+        }),
+      );
+
+      const result = await service.undo();
+
+      expect(result.success).toBeTrue();
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[Task] Update',
+          payload: jasmine.objectContaining({
+            task: jasmine.objectContaining({
+              changes: jasmine.objectContaining({ timeEstimate: 1800 }),
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('should redo TASK_SHARED_UPDATE changing title field', async () => {
+      const updateTitleOp = createOp({
+        id: 'op-update-title-redo',
+        actionType: ActionType.TASK_SHARED_UPDATE,
+        entityId: 'task-title',
+        payload: {
+          actionPayload: {
+            task: {
+              id: 'task-title',
+              changes: {
+                title: 'New Title',
+              },
+            },
+          },
+        },
+      });
+
+      mockStore.select.and.callFake((selector: any) => {
+        if (selector === selectLastRedoOperation) {
+          return of(updateTitleOp);
+        }
+        if (selector === selectCanUndo) {
+          return of(false);
+        }
+        if (selector === selectCanRedo) {
+          return of(true);
+        }
+        return of(undefined);
+      });
+
+      mockRegistry.convertOpToAction.and.returnValue(
+        Promise.resolve({
+          type: '[Task] Update',
+          payload: {
+            task: {
+              id: 'task-title',
+              changes: { title: 'New Title' },
+            },
+          },
+        } as any),
+      );
+
+      const result = await service.redo();
+
+      expect(result.success).toBeTrue();
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[Task] Update',
+          payload: jasmine.objectContaining({
+            task: jasmine.objectContaining({
+              changes: jasmine.objectContaining({ title: 'New Title' }),
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('should redo TASK_SHARED_UPDATE changing isDone field', async () => {
+      const updateDoneOp = createOp({
+        id: 'op-update-done-redo',
+        actionType: ActionType.TASK_SHARED_UPDATE,
+        entityId: 'task-done',
+        payload: {
+          actionPayload: {
+            task: {
+              id: 'task-done',
+              changes: {
+                isDone: true,
+              },
+            },
+          },
+        },
+      });
+
+      mockStore.select.and.callFake((selector: any) => {
+        if (selector === selectLastRedoOperation) {
+          return of(updateDoneOp);
+        }
+        if (selector === selectCanUndo) {
+          return of(false);
+        }
+        if (selector === selectCanRedo) {
+          return of(true);
+        }
+        return of(undefined);
+      });
+
+      mockRegistry.convertOpToAction.and.returnValue(
+        Promise.resolve({
+          type: '[Task] Update',
+          payload: {
+            task: {
+              id: 'task-done',
+              changes: { isDone: true },
+            },
+          },
+        } as any),
+      );
+
+      const result = await service.redo();
+
+      expect(result.success).toBeTrue();
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[Task] Update',
+          payload: jasmine.objectContaining({
+            task: jasmine.objectContaining({
+              changes: jasmine.objectContaining({ isDone: true }),
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('should redo TASK_SHARED_UPDATE changing timeEstimate field', async () => {
+      const updateEstimateOp = createOp({
+        id: 'op-update-estimate-redo',
+        actionType: ActionType.TASK_SHARED_UPDATE,
+        entityId: 'task-estimate',
+        payload: {
+          actionPayload: {
+            task: {
+              id: 'task-estimate',
+              changes: {
+                timeEstimate: 3600,
+              },
+            },
+          },
+        },
+      });
+
+      mockStore.select.and.callFake((selector: any) => {
+        if (selector === selectLastRedoOperation) {
+          return of(updateEstimateOp);
+        }
+        if (selector === selectCanUndo) {
+          return of(false);
+        }
+        if (selector === selectCanRedo) {
+          return of(true);
+        }
+        return of(undefined);
+      });
+
+      mockRegistry.convertOpToAction.and.returnValue(
+        Promise.resolve({
+          type: '[Task] Update',
+          payload: {
+            task: {
+              id: 'task-estimate',
+              changes: { timeEstimate: 3600 },
+            },
+          },
+        } as any),
+      );
+
+      const result = await service.redo();
+
+      expect(result.success).toBeTrue();
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[Task] Update',
+          payload: jasmine.objectContaining({
+            task: jasmine.objectContaining({
+              changes: jasmine.objectContaining({ timeEstimate: 3600 }),
+            }),
+          }),
+        }),
+      );
+    });
+  });
 });

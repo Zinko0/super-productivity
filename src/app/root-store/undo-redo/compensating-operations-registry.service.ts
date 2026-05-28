@@ -33,6 +33,11 @@ type CompensatingHandler = (
 
 type RedoHandler = (op: Operation) => Promise<Action | UndoRedoError>;
 
+/**
+ * Extracts the action payload from an operation payload structure.
+ * Handles both wrapped format (MultiEntityPayload with actionPayload field)
+ * and direct payload format (raw action properties).
+ */
 const extractActionPayload = (payload: unknown): Record<string, unknown> => {
   if (!payload || typeof payload !== 'object') {
     return {};
@@ -46,6 +51,10 @@ const extractActionPayload = (payload: unknown): Record<string, unknown> => {
   return p;
 };
 
+/**
+ * Converts snapshot of previous values (with presence flags) into NgRx Update changes.
+ * Fields that were not present are set to undefined to ensure deletion on redo.
+ */
 const snapshotPreviousValuesToChanges = (
   previousValues: Record<string, { value: unknown; wasPresent: boolean }>,
 ): Update<Task>['changes'] => {
@@ -57,12 +66,22 @@ const snapshotPreviousValuesToChanges = (
   return changes as Update<Task>['changes'];
 };
 
+/**
+ * Registry for generating compensating operations (undo/redo transformations).
+ *
+ * Uses handler maps pattern to decouple operation type logic:
+ * - _undoHandlers: ActionType → compensating op generator
+ * - _redoHandlers: ActionType → action reconstructor
+ *
+ * Supports: TASK_SHARED_ADD, TASK_ADD_SUB, TASK_SHARED_UPDATE, TASK_SHARED_DELETE
+ */
 @Injectable({
   providedIn: 'root',
 })
 export class CompensatingOperationsRegistry {
   private readonly _store = inject<Store<RootState>>(Store);
 
+  /** Maps action types to undo handlers. Each handler generates the reverse operation. */
   private readonly _undoHandlers: Partial<Record<ActionType, CompensatingHandler>> = {
     [ActionType.TASK_SHARED_ADD]: (op) => this._compensateTaskCreate(op),
     [ActionType.TASK_ADD_SUB]: (op) => this._compensateSubTaskCreate(op),
@@ -70,6 +89,7 @@ export class CompensatingOperationsRegistry {
     [ActionType.TASK_SHARED_DELETE]: (op) => this._compensateTaskDelete(op),
   };
 
+  /** Maps action types to redo handlers. Each handler reconstructs the original action from stored operation. */
   private readonly _redoHandlers: Partial<Record<ActionType, RedoHandler>> = {
     [ActionType.TASK_SHARED_ADD]: (op) => this._redoTaskCreate(op),
     [ActionType.TASK_ADD_SUB]: (op) => this._redoSubTaskCreate(op),
@@ -77,6 +97,7 @@ export class CompensatingOperationsRegistry {
     [ActionType.TASK_SHARED_DELETE]: (op) => this._redoTaskDelete(op),
   };
 
+  /** Returns the compensating operation (undo) for a given operation. */
   async getCompensatingOp(
     op: Operation,
   ): Promise<CompensatingOpBuildResult | UndoRedoError> {
@@ -91,6 +112,7 @@ export class CompensatingOperationsRegistry {
     return handler(op);
   }
 
+  /** Reconstructs the original action from a stored operation (for redo). */
   async convertOpToAction(op: Operation): Promise<Action | UndoRedoError> {
     const handler = this._redoHandlers[op.actionType];
     if (!handler) {
@@ -103,6 +125,7 @@ export class CompensatingOperationsRegistry {
     return handler(op);
   }
 
+  /** Undo task creation by generating a delete compensation. */
   private async _compensateTaskCreate(
     op: Operation,
   ): Promise<CompensatingOpBuildResult | UndoRedoError> {
@@ -117,6 +140,9 @@ export class CompensatingOperationsRegistry {
     return this._buildDeleteCompensation(op, task.id, 'Undo task creation');
   }
 
+  /** Undo subtask creation by generating a delete compensation.
+   * IMPORTANT: Validates that subtask is still linked to parent before proceeding.
+   */
   private async _compensateSubTaskCreate(
     op: Operation,
   ): Promise<CompensatingOpBuildResult | UndoRedoError> {
@@ -142,6 +168,7 @@ export class CompensatingOperationsRegistry {
     return this._buildDeleteCompensation(op, task.id, 'Undo sub task creation');
   }
 
+  /** Redo task creation by reconstructing the original add action. */
   private async _redoTaskCreate(op: Operation): Promise<Action | UndoRedoError> {
     const payload = extractActionPayload(op.payload);
     const task = payload.task as Task | undefined;
@@ -161,6 +188,9 @@ export class CompensatingOperationsRegistry {
     });
   }
 
+  /** Redo subtask creation by reconstructing the original add action.
+   * NOTE: Task payload has been merged with any initial update changes in coalescing phase.
+   */
   private async _redoSubTaskCreate(op: Operation): Promise<Action | UndoRedoError> {
     const payload = extractActionPayload(op.payload);
     const task = payload.task as Task | undefined;
@@ -178,6 +208,7 @@ export class CompensatingOperationsRegistry {
     });
   }
 
+  /** Redo task update by reconstructing the original update action. */
   private async _redoTaskUpdate(op: Operation): Promise<Action | UndoRedoError> {
     const payload = extractActionPayload(op.payload);
     const taskUpdate = payload.task as Update<Task> | undefined;
@@ -199,6 +230,7 @@ export class CompensatingOperationsRegistry {
     });
   }
 
+  /** Redo task deletion by reconstructing the original delete action. */
   private async _redoTaskDelete(op: Operation): Promise<Action | UndoRedoError> {
     const payload = extractActionPayload(op.payload);
     const task = payload.task as Task | undefined;
@@ -220,6 +252,7 @@ export class CompensatingOperationsRegistry {
     return TaskSharedActions.deleteTask({ task: currentTask });
   }
 
+  /** Helper to build a delete compensation action. Fetches current task state to include subtasks. */
   private async _buildDeleteCompensation(
     op: Operation,
     taskId: string,
@@ -241,11 +274,15 @@ export class CompensatingOperationsRegistry {
     });
   }
 
+  /** Extracts task from operation payload. Shorthand for TASK_SHARED_ADD pattern. */
   private _extractTaskFromPayload(payload: unknown): Task | undefined {
     const actionPayload = extractActionPayload(payload);
     return actionPayload.task as Task | undefined;
   }
 
+  /** Undo task update by reconstructing previous values from snapshot.
+   * IMPORTANT: Snapshot must be captured in undo-task-update meta-reducer before state mutation.
+   */
   private async _compensateTaskUpdate(
     op: Operation,
   ): Promise<CompensatingOpBuildResult | UndoRedoError> {
@@ -291,6 +328,9 @@ export class CompensatingOperationsRegistry {
     });
   }
 
+  /** Undo task deletion by generating a restore compensation.
+   * IMPORTANT: Snapshot must be captured in undo-task-delete meta-reducer before deletion.
+   */
   private _compensateTaskDelete(
     op: Operation,
   ): Promise<CompensatingOpBuildResult | UndoRedoError> {
@@ -315,6 +355,7 @@ export class CompensatingOperationsRegistry {
     );
   }
 
+  /** Factory method to build a compensating operation result from action and metadata. */
   private _buildResult({
     op,
     operationType,
@@ -341,6 +382,7 @@ export class CompensatingOperationsRegistry {
     };
   }
 
+  /** Fetches task and all associated subtasks from store. Used for validating and rebuilding state. */
   private async _getTaskWithSubTasks(id: string): Promise<TaskWithSubTasks | undefined> {
     return firstValueFrom(
       this._store.select(selectTaskByIdWithSubTaskData, { id }).pipe(take(1)),
