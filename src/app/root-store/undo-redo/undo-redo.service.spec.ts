@@ -14,6 +14,8 @@ import {
 } from './undo-redo.selectors';
 import { ActionType, Operation } from '../../op-log/core/operation.types';
 import { UndoRedoOperationType } from './undo-redo.types';
+import { UNDO_OPERATION_PAYLOAD_KEY } from '../meta/undo-operation-payload.meta-reducer';
+import { TASK_UPDATE_UNDO_PAYLOAD_TYPE } from '../meta/undo-task-update.meta-reducer';
 
 describe('UndoRedoService', () => {
   let service: UndoRedoService;
@@ -514,7 +516,8 @@ describe('UndoRedoService', () => {
                 isDone: true,
               },
             },
-            [Symbol.for('UNDO_OPERATION_PAYLOAD_KEY')]: {
+            [UNDO_OPERATION_PAYLOAD_KEY]: {
+              type: TASK_UPDATE_UNDO_PAYLOAD_TYPE,
               snapshot: {
                 previousValues: {
                   title: { value: 'Original Title', wasPresent: true },
@@ -807,7 +810,8 @@ describe('UndoRedoService', () => {
                 title: 'New Title',
               },
             },
-            [Symbol.for('UNDO_OPERATION_PAYLOAD_KEY')]: {
+            [UNDO_OPERATION_PAYLOAD_KEY]: {
+              type: TASK_UPDATE_UNDO_PAYLOAD_TYPE,
               snapshot: {
                 previousValues: {
                   title: { value: 'Old Title', wasPresent: true },
@@ -885,7 +889,8 @@ describe('UndoRedoService', () => {
                 isDone: true,
               },
             },
-            [Symbol.for('UNDO_OPERATION_PAYLOAD_KEY')]: {
+            [UNDO_OPERATION_PAYLOAD_KEY]: {
+              type: TASK_UPDATE_UNDO_PAYLOAD_TYPE,
               snapshot: {
                 previousValues: {
                   isDone: { value: false, wasPresent: true },
@@ -963,7 +968,8 @@ describe('UndoRedoService', () => {
                 timeEstimate: 3600,
               },
             },
-            [Symbol.for('UNDO_OPERATION_PAYLOAD_KEY')]: {
+            [UNDO_OPERATION_PAYLOAD_KEY]: {
+              type: TASK_UPDATE_UNDO_PAYLOAD_TYPE,
               snapshot: {
                 previousValues: {
                   timeEstimate: { value: 1800, wasPresent: true },

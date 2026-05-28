@@ -138,8 +138,4 @@ export const undoRedoReducer = createReducer(
 
     return { ...state, redoStack: remainingRedo, undoStack };
   }),
-
-  on(UndoRedoActions.clearHistory, () => {
-    return initialUndoRedoState;
-  }),
 );

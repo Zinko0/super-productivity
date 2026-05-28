@@ -31,12 +31,6 @@ export const UndoRedoActions = createActionGroup({
     redo: emptyProps(),
 
     /**
-     * Clear all undo/redo history.
-     * Useful for major state changes or resets.
-     */
-    clearHistory: emptyProps(),
-
-    /**
      * Notify that undo/redo succeeded.
      */
     undoRedoSuccess: props<{ label: string; performedAction: 'undo' | 'redo' }>(),
