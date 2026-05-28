@@ -67,6 +67,10 @@ export const undoRedoReducer = createReducer(
   // Add operation to undo stack
   on(UndoRedoActions.addToUndoStack, (state: UndoRedoState, { operation }) => {
     const previousTop = state.undoStack[0];
+    // Creating a subtask can be followed immediately by an initial update
+    // (for example when short syntax or inline editing fills in the final data).
+    // Keep this as one undoable operation so redo recreates the subtask with the
+    // final payload instead of replaying an empty create plus a separate update.
     const isInitialSubTaskUpdate =
       operation.actionType === ActionType.TASK_SHARED_UPDATE &&
       previousTop?.actionType === ActionType.TASK_ADD_SUB &&

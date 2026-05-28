@@ -41,7 +41,7 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 import { DateService } from '../../../core/date/date.service';
-import { PersistentActionMeta } from '../../../op-log/core/persistent-action.interface';
+import { isCompensatingAction } from '../../../op-log/core/persistent-action.interface';
 import { UndoRedoService } from '../../../root-store/undo-redo/undo-redo.service';
 
 @Injectable()
@@ -64,7 +64,7 @@ export class TaskUiEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.addTask),
-        filter(({ meta }) => !(meta as PersistentActionMeta | undefined)?.isCompensating),
+        filter((action) => !isCompensatingAction(action)),
         withLatestFrom(this._workContextService.mainListTaskIds$),
         switchMap(([{ task }, activeContextTaskIds]) => {
           if (task.projectId) {
@@ -118,7 +118,7 @@ export class TaskUiEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.deleteTask),
-        filter(({ meta }) => !(meta as PersistentActionMeta | undefined)?.isCompensating),
+        filter((action) => !isCompensatingAction(action)),
         tap(({ task }) => {
           this._snackService.open({
             translateParams: {
@@ -200,6 +200,7 @@ export class TaskUiEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
+        filter((action) => !isCompensatingAction(action)),
         filter(({ task: { changes } }) => !!changes.isDone),
         withLatestFrom(
           this._workContextService.flatDoneTodayNr$,

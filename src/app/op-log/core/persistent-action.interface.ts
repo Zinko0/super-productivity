@@ -21,6 +21,11 @@ export interface PersistentAction extends Action {
   [key: string]: any; // Dynamic payload properties (NgRx action payloads)
 }
 
+export const isCompensatingAction = (action: Action): boolean => {
+  const actionWithMeta = action as Action & { meta?: Partial<PersistentActionMeta> };
+  return !!actionWithMeta.meta?.isCompensating;
+};
+
 // Helper type guard - only actions with explicit isPersistent: true are persisted
 export const isPersistentAction = (action: Action): action is PersistentAction => {
   const a = action as PersistentAction;

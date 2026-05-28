@@ -4,14 +4,16 @@ import { RootState } from '../root-state';
 import { TASK_FEATURE_NAME } from '../../features/tasks/store/task.reducer';
 import { Task } from '../../features/tasks/task.model';
 import { TaskSharedActions } from './task-shared.actions';
-import { SnapshotPayload } from '../undo-redo/undo-redo.types';
+import { SnapshotPayload, SnapshotValue } from '../undo-redo/undo-redo.types';
 import type { UndoPayloadBuilder } from './undo-operation-payload.meta-reducer';
 
 export const TASK_UPDATE_UNDO_PAYLOAD_TYPE = 'TASK_UPDATE';
 
 export interface TaskUpdateUndoPayload {
   type: typeof TASK_UPDATE_UNDO_PAYLOAD_TYPE;
-  snapshot: SnapshotPayload;
+  snapshot: SnapshotPayload & {
+    previousValues: Record<string, SnapshotValue>;
+  };
 }
 
 export const isTaskUpdateUndoPayload = (
@@ -22,10 +24,15 @@ export const isTaskUpdateUndoPayload = (
   }
 
   const p = payload as Partial<TaskUpdateUndoPayload>;
+  const previousValues = p.snapshot?.previousValues;
   return (
     p.type === TASK_UPDATE_UNDO_PAYLOAD_TYPE &&
-    !!p.snapshot?.previousValues &&
-    Object.keys(p.snapshot.previousValues).length > 0
+    !!previousValues &&
+    Object.keys(previousValues).length > 0 &&
+    Object.values(previousValues).every(
+      (entry) =>
+        !!entry && typeof entry === 'object' && typeof entry.wasPresent === 'boolean',
+    )
   );
 };
 
@@ -43,13 +50,17 @@ export const taskUpdateUndoPayloadBuilder: UndoPayloadBuilder = {
       return null;
     }
 
-    const previousValues: Record<string, unknown> = {};
+    const previousValues: Record<string, SnapshotValue> = {};
+    const currentTaskRecord = currentTask as Record<string, unknown>;
     for (const key of Object.keys(task.changes)) {
       if (key === 'modified') {
         continue;
       }
 
-      previousValues[key] = (currentTask as Record<string, unknown>)[key];
+      previousValues[key] = {
+        value: currentTaskRecord[key],
+        wasPresent: Object.prototype.hasOwnProperty.call(currentTaskRecord, key),
+      };
     }
 
     if (Object.keys(previousValues).length === 0) {

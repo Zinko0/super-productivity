@@ -19,14 +19,14 @@ export const UndoRedoActions = createActionGroup({
     /**
      * Perform an undo operation.
      * Pops from undo stack and pushes to redo stack.
-     * The effect will dispatch the reverse action.
+     * UndoRedoService dispatches the compensating action.
      */
     undo: emptyProps(),
 
     /**
      * Perform a redo operation.
      * Pops from redo stack and pushes to undo stack.
-     * The effect will dispatch the original action.
+     * UndoRedoService dispatches the original persisted action.
      */
     redo: emptyProps(),
 

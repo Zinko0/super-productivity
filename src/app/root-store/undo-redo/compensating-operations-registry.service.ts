@@ -20,6 +20,7 @@ import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
 import { selectTaskByIdWithSubTaskData } from '../../features/tasks/store/task.selectors';
 import { UNDO_OPERATION_PAYLOAD_KEY } from '../meta/undo-operation-payload.meta-reducer';
 import { isTaskDeleteUndoPayload } from '../meta/undo-task-delete.meta-reducer';
+import { isTaskUpdateUndoPayload } from '../meta/undo-task-update.meta-reducer';
 
 interface CompensatingOpBuildResult {
   operation: UndoRedoOperation;
@@ -43,6 +44,17 @@ const extractActionPayload = (payload: unknown): Record<string, unknown> => {
   }
 
   return p;
+};
+
+const snapshotPreviousValuesToChanges = (
+  previousValues: Record<string, { value: unknown; wasPresent: boolean }>,
+): Update<Task>['changes'] => {
+  const changes: Record<string, unknown> = {};
+  for (const [key, previousValue] of Object.entries(previousValues)) {
+    changes[key] = previousValue.wasPresent ? previousValue.value : undefined;
+  }
+
+  return changes as Update<Task>['changes'];
 };
 
 @Injectable({
@@ -248,19 +260,7 @@ export class CompensatingOperationsRegistry {
       };
     }
 
-    if (!undoPayload || typeof undoPayload !== 'object') {
-      return {
-        code: UndoRedoErrorCode.MissingSnapshot,
-        message:
-          'Cannot undo task update because the previous values snapshot is missing.',
-      };
-    }
-
-    const previousValues = (
-      undoPayload as { snapshot?: { previousValues?: Record<string, unknown> } }
-    ).snapshot?.previousValues;
-
-    if (!previousValues || Object.keys(previousValues).length === 0) {
+    if (!isTaskUpdateUndoPayload(undoPayload)) {
       return {
         code: UndoRedoErrorCode.MissingSnapshot,
         message:
@@ -284,8 +284,9 @@ export class CompensatingOperationsRegistry {
       action: TaskSharedActions.updateTask({
         task: {
           id: taskId,
-          changes: previousValues as Update<Task>['changes'],
+          changes: snapshotPreviousValuesToChanges(undoPayload.snapshot.previousValues),
         } as Update<Task>,
+        isIgnoreShortSyntax: true,
       }),
     });
   }

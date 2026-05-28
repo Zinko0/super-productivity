@@ -21,8 +21,13 @@ export enum UndoRedoOperationType {
   Update = 'UPDATE',
 }
 
+export interface SnapshotValue {
+  value: unknown;
+  wasPresent: boolean;
+}
+
 export interface SnapshotPayload {
-  previousValues?: Record<string, unknown>;
+  previousValues?: Record<string, SnapshotValue>;
 }
 
 export interface UndoRedoOperation {

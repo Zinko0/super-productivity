@@ -3,12 +3,11 @@
  *
  * Simple stacks-based approach using Operations as source of truth:
  * - When user does action → Operation created → added to undoStack
- * - Undo (Ctrl+Z) → pop from undoStack → push to redoStack → dispatch reverse action
- * - Redo (Ctrl+Shift+Z) → pop from redoStack → push to undoStack → dispatch original action
+ * - Undo (Ctrl+Z) → service dispatches undo + compensating action
+ * - Redo (Ctrl+Shift+Z) → service dispatches redo + original persisted action
  *
- * IMPORTANT: When undo/redo effects dispatch compensating actions (deleteTask, addTask),
- * those actions must NOT be re-captured into the undo stack, else infinite loop.
- * Solution: use isProcessingUndoRedo flag to skip capture during undo/redo.
+ * IMPORTANT: Undo/redo actions are marked with meta.isCompensating so they are
+ * persisted and synced, but not re-added to the local undo stack.
  */
 
 import { Operation } from '../../op-log/core/operation.types';
