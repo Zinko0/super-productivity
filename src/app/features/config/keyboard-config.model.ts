@@ -50,6 +50,8 @@ export type KeyboardConfig = Readonly<{
   togglePlay?: string | null;
   taskEditTags?: string | null;
 
+  undo?: string | null;
+
   // Dynamic plugin shortcuts - added at runtime
   [key: `plugin_${string}`]: string | null;
 }>;

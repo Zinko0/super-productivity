@@ -22,6 +22,7 @@ import {
   moveProjectTaskToBacklogList,
   moveProjectTaskToBacklogListAuto,
 } from '../../project/store/project.actions';
+import { filterNonCompensatingAction } from '../../../util/filter-local-action';
 
 @Injectable()
 export class TaskInternalEffects {
@@ -32,6 +33,7 @@ export class TaskInternalEffects {
   onAllSubTasksDone$ = createEffect(() =>
     this._actions$.pipe(
       ofType(TaskSharedActions.updateTask),
+      filterNonCompensatingAction(),
       withLatestFrom(
         this._store$.pipe(select(selectTasksConfig)),
         this._store$.pipe(select(selectTaskFeatureState)),
@@ -102,6 +104,7 @@ export class TaskInternalEffects {
         moveProjectTaskToBacklogList.type,
         moveProjectTaskToBacklogListAuto.type,
       ),
+      filterNonCompensatingAction(),
       withLatestFrom(
         this._store$.pipe(select(selectConfigFeatureState)),
         this._store$.pipe(select(selectTaskFeatureState)),
